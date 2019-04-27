@@ -1,0 +1,7 @@
+roscore
+
+rostopic echo action
+
+source ~/virtualenv/py36/bin/activate
+cd ~/KaratUnreal/catkin_ws/c/airsiminterface/src
+python p.py
