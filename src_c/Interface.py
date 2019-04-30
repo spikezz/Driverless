@@ -14,7 +14,7 @@ from geometry_msgs.msg import Pose
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32MultiArray
 from std_msgs.msg import Float64
-
+from xbox360controller import Xbox360Controller
 
 import numpy as np
 import calculate as cal
@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import scipy.special as ss
 
+import signal
 import airsim
 import rospy
 import os
@@ -29,9 +30,21 @@ import tools
 import RL
 import time
 
+def on_button_pressed(button):
+    print('Button {0} was pressed'.format(button.name))
+
+def on_button_released(button):
+    print('Button {0} was released'.format(button.name))
+
+def on_thumbstick_axis_moved(axis):
+    print('Axis {0} moved to {1} {2}'.format(axis.name, axis.x, axis.y))
+    
+def on_trigger_axis_moved(axis):
+    print('Axis {0} moved to {1}'.format(axis.name, axis._value))
+
 client = airsim.CarClient()
 client.confirmConnection()
-client.enableApiControl(True)
+client.enableApiControl(False)
 car_controls = airsim.CarControls()
 
 def set_throttle(data):
@@ -350,6 +363,7 @@ pub_action = rospy.Publisher('action', Float32MultiArray, queue_size=1000)
 pub_blue_cone=rospy.Publisher('rightCones', PoseArray, queue_size=1000)
 pub_yellow_cone=rospy.Publisher('leftCones', PoseArray, queue_size=1000)
 #pub_Q = rospy.Publisher('Quaternion', Quaternion, queue_size=1000)
+sub_brake=rospy.Subscriber("brake",Float64,set_brake)
 sub_throt=rospy.Subscriber("throttle",Float64,set_throttle)
 sub_steer=rospy.Subscriber("steeringAngle",Float64, set_steering)
 
@@ -445,6 +459,30 @@ while not rospy.is_shutdown():
         ycn_msg.poses.append(new_pose)
         
 
+
+    try:
+        with Xbox360Controller(0, axis_threshold=0.2) as controller:
+            # Button A events
+            controller.button_a.when_pressed = on_button_pressed
+            controller.button_a.when_released = on_button_released
+            
+            controller.trigger_l.when_moved = on_trigger_axis_moved
+            controller.trigger_l.when_moved = on_trigger_axis_moved
+            
+            controller.trigger_r.when_moved = on_trigger_axis_moved
+            controller.trigger_r.when_moved = on_trigger_axis_moved
+            
+            controller.button_start.when_pressed = on_button_pressed
+            controller.button_start.when_released = on_button_released
+    
+            # Left and right axis move event
+            controller.axis_l.when_moved = on_thumbstick_axis_moved
+            controller.axis_r.when_moved = on_thumbstick_axis_moved
+    
+            signal.pause()
+            
+    except KeyboardInterrupt:
+        pass
     
 #    pub_I.publish(image_msg)
     pub_acceleration.publish(acc_msg)

@@ -5,14 +5,16 @@ Created on Thu Feb 28 22:06:58 2019
 
 @author: spikezz
 """
+import itertools
 import tensorflow as tf
 import numpy as np
+
 #import os
 #from keras import regularizers
 
-
 np.random.seed(3)
 tf.set_random_seed(1)
+tf_seed=1
 
 H1_a=4400  
 H2_a=4400 
@@ -39,286 +41,251 @@ with tf.name_scope('A_I'):
 with tf.name_scope('S_'):
     S_ = tf.placeholder(tf.float32, shape=[None, input_dim], name='s_')
 
-
-
-
 class Actor(object):
     
-    def __init__(self, sess, n_a,n_s, action_bound, LR,lr_i,t_replace_iter):
+    def __init__(self, sess, action_dimension, state_dimension, action_bound, lr_r=None, lr_i=None, t_replace_iter=None, agent_i=False, agent_r=False):
+        
         self.sess = sess
-        self.s_dim = n_s
-        self.a_dim = n_a
+        
+        self.s_dim = state_dimension
+        self.a_dim = action_dimension
+        
         self.action_bound = action_bound
-        self.lr = LR
-        self.lr_i=lr_i
+        
+        self.lr_r = lr_r
+        self.lr_i = lr_i
+        
+        self.momentum = 0.9
+        
         self.t_replace_iter = t_replace_iter
-        self.t_replace_counter =0
-        self.Momentum=0.9
+        self.t_replace_counter = 0
         
-        self.angle=[]
-        self.accelerate=[]
-        self.brake=[]
+        self.number_of_hidden_layers=4
+        
+        self.steering_angle_controller=[]
+        self.steering_angle_imitation=[]
+        self.throttle_controller=[]
+        self.throttle_imitation=[]
+        self.brake_controller=[]
+        self.brake_imitation=[]
+        
+        self.writer = tf.summary.FileWriter("/home/spikezz/RL project copy/Driverless/src_c/logs")
+        
         self.summary_set=[]
-        self.writer = tf.summary.FileWriter("/home/spikezz/Driverless/aktuelle zustand/RL_Driverless/src_c/logs")
         
-        with tf.variable_scope('std'):
-            
-            init_std_1=tf.constant_initializer(0.002)
-            init_std_2=tf.constant_initializer(0.002)
-            init_std_3=tf.constant_initializer(0.002)
-            
-            self.l1_n_std=tf.get_variable('w1_s_n_std',[],initializer=init_std_1, trainable=False)
-            self.l2_n_std=tf.get_variable('w2_s_n_std',[],initializer=init_std_2, trainable=False)
-            self.l3_n_std=tf.get_variable('w3_s_n_std',[],initializer=init_std_3, trainable=False)
-            
         self.std_decay=tf.constant(0.99999)
         
-        with tf.variable_scope('Actor'):
-            # input s, output a
+        if agent_i:
             
-            self.a = self._build_net(S, scope='eval_net', trainable=True)
+            self.scope_name='actor_imitation'
+            
+        if agent_r:
+            
+            self.scope_name='actor_reinforcement'
+            
+        with tf.variable_scope(self.scope_name):
+            
+            # input s, output a    
+            self.a = self._build_net(S, parameter_noise=False, summeraize_parameter=False,summeraize_output=False,\
+                                     scope='evaluation_net', trainable=True)
+            
+            self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name+'/evaluation_net')
 
-            # input s_, output a, get a_ for critic
-            self.a_ = self._build_net(S_, scope='target_net', trainable=False)
-            
-            self.loss_imitation=tf.reduce_mean(tf.squared_difference(self.a, A_I))
+            if agent_i:
+                
+                self.loss_imitation=tf.reduce_mean(tf.squared_difference(self.a, A_I))
+#            #cross entropy
 #            self.a_distribution=tf.nn.softmax(self.a) 
 #            self.a_i_distribution=tf.nn.softmax(A_I) 
-#            self.loss_imitation=tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits =self.a_distribution, labels = self.a_i_distribution))
-#            self.p_loss_imitation=tf.Print(self.loss_imitation,[self.a,A_I,self.loss_imitation],message='loss_imitation', summarize=32)
-#            self.p_loss_imitation=tf.Print(self.loss_imitation,[self.a,A_I,self.a_distribution,self.a_i_distribution,self.loss_imitation],message='loss_imitation', summarize=32)
-            self.loss_imitation_scalar=tf.summary.scalar('loss_imitation_', self.loss_imitation)
-            self.summary_set.append(self.loss_imitation_scalar)
+#            self.loss_imitation=tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits =self.a_distribution, labels = self.a_i_distribution)) 
+#            self.print_loss_imitation=tf.Print(self.loss_imitation,[self.a,A_I,self.a_distribution,self.a_i_distribution,self.loss_imitation],message='loss_imitation', summarize=32)
+                
+                self.loss_imitation_scalar=tf.summary.scalar('loss_imitation', self.loss_imitation)
+                self.summary_set.append(self.loss_imitation_scalar)
+                
+                with tf.variable_scope('imitation_train'):
+                    
+        #            self.train_op = tf.train.AdamOptimizer(self.lr_i).minimize(self.loss_imitation)
+        #            self.train_imitation = tf.train.MomentumOptimizer(self.lr_i,self.Momentum).minimize(self.loss_imitation)
+                    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                    update_ops = list(itertools.chain.from_iterable(update_ops))
+#                    print(update_ops)
+                    with tf.control_dependencies(update_ops):
+                        
+                        self.opt_i = tf.train.MomentumOptimizer(self.lr_i,self.momentum)     
+                        self.i_grads = tf.gradients(ys=self.loss_imitation, xs=self.e_params, grad_ys=None)
+                        self.i_grads_hist=tf.summary.histogram('i_grads',self.i_grads[0])
+                        self.summary_set.append(self.i_grads_hist)     
+                        self.train_imitation=self.opt_i.apply_gradients(zip(self.i_grads,self.e_params))
             
-        self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Actor/eval_net')
-        self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Actor/target_net')
+            if agent_r:
+                            # input s_, output a_, get a_ for critic
+                self.a_ = self._build_net(S_, parameter_noise=False, summeraize_parameter=False,summeraize_output=False,\
+                                      scope='target_net', trainable=False)
+                
+                self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name+'/target_net')
+                
+                with tf.variable_scope('noise_standard_deviation_minmax'):
+                    
+                    self.init_noise_std=[0]*self.number_of_hidden_layers
+                    self.layer_noise_std=[0]*self.number_of_hidden_layers
+                    self.noise_min=[0]*self.number_of_hidden_layers
+                    self.noise_max=[0]*self.number_of_hidden_layers
+                    
+                    for i in range(0,self.number_of_hidden_layers):
+                        
+                        self.init_noise_std[i]=tf.constant_initializer(0.002) 
+                        self.layer_noise_std[i]=tf.get_variable('w%d_s_noise_std'%(i+1),[],initializer=self.init_noise_std[i], trainable=False)
+                        self.noise_min[i]=tf.constant_initializer(-0.002) 
+                        self.noise_max[i]=tf.constant_initializer(0.002) 
+                
+                self.a_noise = self._build_net(S_, parameter_noise=True, summeraize_parameter=False,summeraize_output=False,\
+                                      scope='evaluation_net_with_parameter_noise', trainable=False)
+                self.error_parameter_noise=tf.reduce_mean(tf.squared_difference(self.a, self.a_noise))
+                
+                self.error_scalar=tf.summary.scalar('parameter_noise_action_error', self.error_parameter_noise)
+                self.summary_set.append(self.error_scalar)
+                    
+                self.e_params_with_noise = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name+'/evaluation_net_with_parameter_noise')
+                self.parameter_copy_noise_net = [tf.assign(e_n, e)for e_n, e in zip(self.e_params_with_noise, self.e_params)]
+                self.soft_replace = [tf.assign(t, (1 - TAU_A) * t + TAU_A * e) for t, e in zip(self.t_params, self.e_params)]
+
+    def duplicate_net(self):
+
+        self.sess.run(self.parameter_copy_noise_net)        
         
-        with tf.variable_scope('Imitation_train'):
-#            self.train_op = tf.train.AdamOptimizer(self.lr_i).minimize(self.loss_imitation)
-#            self.train_imitation = tf.train.MomentumOptimizer(self.lr_i,self.Momentum).minimize(self.loss_imitation)
+    def _build_layer(self, hidden_neuro_dim, layer_input_dim,layer_input,layer_idx,initializer_w,initializer_b, dropout_rate=0.1, \
+                     parameter_noise=False,summeraize_parameter=False, summeraize_output=False, trainable=None): 
+        if parameter_noise:
             
-            self.opt_i = tf.train.MomentumOptimizer(self.lr_i,self.Momentum)        
-            self.i_grads = tf.gradients(ys=self.loss_imitation, xs=self.e_params, grad_ys=None)
-            self.i_grads_hist=tf.summary.histogram('i_grads_',self.i_grads[0])
-            self.summary_set.append(self.i_grads_hist)           
-            self.train_imitation=self.opt_i.apply_gradients(zip(self.i_grads,self.e_params))
+            layer_scope = 'layer_%d_with_parameter_noise'%(layer_idx+1)
+           
+        else:
+            
+            layer_scope = 'layer_%d'%(layer_idx+1)
         
-        self.soft_replace = [tf.assign(t, (1 - TAU_A) * t + TAU_A * e) for t, e in zip(self.t_params, self.e_params)]
+        weight_scope = 'weight_actor_layer%d'%(layer_idx+1)
+        bias_scope = 'bias_actor_layer%d'%(layer_idx+1)
         
-       
+        layer_weight_histogram_scope='hist_weight_actor_layer%d'%(layer_idx+1)
+        layer_bias_histogram_scope='hist_bias_actor_layer%d'%(layer_idx+1)
         
-    def _build_net(self, s, scope, trainable):
+        layer_normalization_scope='normalization_actor_layer%d'%(layer_idx+1)
+        layer_normalizer_scope='normalizer_actor_layer%d'%(layer_idx+1)
+        
+        layer_noise_scope='actor_layer%d_with_noise'%(layer_idx+1)
+        
+        weight_noise_scope='weight%d_with_noise'%(layer_idx+1)
+        bias_noise_scope='bias%d_with_noise'%(layer_idx+1)
+        
+        layer_weight_noise_histogram_scope='hist_weight_with_noise_actor_layer%d'%(layer_idx+1)
+        layer_bias_noise_histogram_scope='hist_bias_with_noise_actor_layer%d'%(layer_idx+1)
+        
+        layer_output_scope='output_actor_layer%d'%(layer_idx+1)
+        
+        with tf.variable_scope(layer_scope):
+            
+            with tf.variable_scope(layer_normalization_scope):
+                
+                batch_normalization=tf.keras.layers.BatchNormalization(name=layer_normalizer_scope)
+                layer_input_normalization=batch_normalization(layer_input,training=True)
+                tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, batch_normalization.updates)
+            
+            w_collection = tf.get_variable(weight_scope, [layer_input_dim, hidden_neuro_dim], initializer=initializer_w, trainable=trainable)
+            b_collection = tf.get_variable(bias_scope, [1, hidden_neuro_dim], initializer=initializer_b, trainable=trainable)
+            
+            if summeraize_parameter==True:
+                    
+                l_w_hist=tf.summary.histogram(layer_weight_histogram_scope,w_collection)
+                self.summary_set.append(l_w_hist)
+                l_b_hist=tf.summary.histogram(layer_bias_histogram_scope,b_collection)
+                self.summary_set.append(l_b_hist) 
+            
+            if parameter_noise:
+            
+                with tf.variable_scope(layer_noise_scope):
+                    
+                    w_noise=tf.random_normal(w_collection.shape,stddev=self.layer_noise_std[layer_idx],name=weight_noise_scope)
+                    w_collection_with_noise=w_collection+w_noise
+                    
+                    b_noise=tf.random_normal(b_collection.shape,stddev=self.layer_noise_std[layer_idx],name=bias_noise_scope)
+                    b_collection_with_noise=b_collection+b_noise
+                    
+                    if summeraize_parameter==True:
+                        
+                        l_w_noise_hist=tf.summary.histogram(layer_weight_noise_histogram_scope,w_collection_with_noise)
+                        self.summary_set.append(l_w_noise_hist)
+                        l_b_noise_hist=tf.summary.histogram(layer_bias_noise_histogram_scope,b_collection_with_noise)
+                        self.summary_set.append(l_b_noise_hist)
+                    
+                    layer_output_with_noise=tf.nn.leaky_relu(tf.matmul(layer_input_normalization, w_collection_with_noise)+b_collection_with_noise)   
+                    layer_output_disturbed=tf.nn.dropout(layer_output_with_noise,rate=dropout_rate)
+                                
+                    if summeraize_output==True:
+                    
+                        l_disturbed_hist=tf.summary.histogram(layer_output_scope,layer_output_disturbed)
+                        self.summary_set.append(l_disturbed_hist)
+                        
+                    return  layer_output_disturbed
+                
+            else:
+                
+                layer_output_without_noise = tf.nn.leaky_relu(tf.matmul(layer_input_normalization, w_collection) + b_collection)
+                layer_output = tf.nn.dropout(layer_output_without_noise,rate=dropout_rate) 
+                
+                if summeraize_output==True:
+                        
+                    l_hist=tf.summary.histogram(layer_output_scope,layer_output)
+                    self.summary_set.append(l_hist) 
+                        
+                return layer_output
+                            
+    def _build_net(self, s, parameter_noise=False, summeraize_parameter=False, summeraize_output=False, scope=None, trainable=None):
         
         with tf.variable_scope(scope):
             
 #            init_w=tf.random_uniform_initializer(-0.9,0.9)
 #            init_b=tf.random_uniform_initializer(-0.15,0.15)
-            init_w = tf.contrib.layers.xavier_initializer(uniform=False)
-            init_b = tf.contrib.layers.xavier_initializer(uniform=False)
 #            init_w=tf.random_normal_initializer(0,0.05)
 #            init_b=tf.random_normal_initializer(0,0.05)
 #            init_w = tf.keras.initializers.he_normal()
 #            init_b= tf.keras.initializers.he_normal()
             
-            with tf.variable_scope('l1'):
-                n_l1 = H1_a
-                w1_s = tf.get_variable('w1_s', [self.s_dim, n_l1], initializer=init_w, trainable=trainable)
-                b1 = tf.get_variable('b1', [1, n_l1], initializer=init_b, trainable=trainable)
-#                layer1 = tf.nn.softplus(tf.matmul(s, w1_s) + b1)
-#                layer1 = tf.nn.relu(tf.matmul(s, w1_s) + b1)
-                s_n=tf.layers.batch_normalization(s,name='s_normalize_a')
-                layer1 = tf.nn.leaky_relu(tf.matmul(s_n, w1_s) + b1)
+            init_w = tf.keras.initializers.glorot_normal(seed=tf_seed)
+            init_b = tf.keras.initializers.glorot_normal(seed=tf_seed)
                 
-#            with tf.variable_scope('l1_n'):
-#                
-#                w1_s_noise=tf.random_normal(w1_s.shape,stddev=self.l1_n_std,name='w1_s_n')
-##                w1_s_noise=tf.random_uniform(w1_s.shape,stddev=self.l1_n_std,name='w1_s_n')
-#                w1_s_n=w1_s+w1_s_noise
-#                b1_noise=tf.random_normal(b1.shape,stddev=self.l1_n_std,name='b1_n')
-#                b1_n=b1+b1_noise
-##                layer1_n=tf.nn.softplus(tf.matmul(s, w1_s_n) + b1_n)
-##                layer1_n=tf.nn.relu(tf.matmul(s, w1_s_n) + b1_n)
-#                layer1_n=tf.nn.leaky_relu(tf.matmul(s, w1_s_n) + b1_n)
-                
-#                self.l1_w_n_hist=tf.summary.histogram('l1_a_w_n_',w1_s_n)
-#                self.summary_set.append(self.l1_w_n_hist)
-#                self.l1_b_n_hist=tf.summary.histogram('l1_a_b_n_',b1_n)
-#                self.summary_set.append(self.l1_b_n_hist)
-                
-#            layer1 = tf.layers.dense(s, H1, activation=tf.nn.softplus,kernel_initializer=init_w, bias_initializer=init_b, name='l1',trainable=trainable)
-                
-#                self.l1_w_hist=tf.summary.histogram('l1_a_w_',w1_s)
-#                self.summary_set.append(self.l1_w_hist)
-#                self.l1_b_hist=tf.summary.histogram('l1_a_b_',b1)
-#                self.summary_set.append(self.l1_b_hist)
-                
-            with tf.variable_scope('l1_normalization'):
-                
-                layer1_n_n=tf.layers.batch_normalization(layer1,name='layer1_n_n_')
-#                self.l1_hist=tf.summary.histogram('l1_a_n_n_',layer1_n_n)
-#                self.summary_set.append(self.l1_hist)
-#                self.p_layer1_n=tf.Print(layer1_n,[layer1_n],message="no normal",summarize=30)
-#                self.p_layer1_n_n=tf.Print(layer1_n_n,[layer1_n_n],message="with normal",summarize=30)
+            layer=[None]*(self.number_of_hidden_layers)
             
-            with tf.variable_scope('l1_dropout'):
-                
-                layer1_do=tf.nn.dropout(layer1_n_n,0.9) 
-#                self.l1_hist=tf.summary.histogram('layer1_do',layer1_do)
-#                self.summary_set.append(self.l1_hist)
-                
-            with tf.variable_scope('l2'):
-                
-                n_l2 = H2_a
-                w2_s = tf.get_variable('w2_s', [n_l1, n_l2], initializer=init_w, trainable=trainable)
-                b2 = tf.get_variable('b2', [1, n_l2], initializer=init_b, trainable=trainable)
-#                layer2 = tf.nn.softplus(tf.matmul(layer1, w2_s) + b2)
-#                layer2 = tf.nn.relu(tf.matmul(layer1, w2_s) + b2)
-                layer2 = tf.nn.leaky_relu(tf.matmul(layer1_do, w2_s) + b2)
-                
-#            with tf.variable_scope('l2_n'):
-#                w2_s_noise=tf.random_normal(w2_s.shape,stddev=self.l2_n_std,name='w2_s_n')
-#                w2_s_n=w2_s+w2_s_noise
-#                b2_noise=tf.random_normal(b2.shape,stddev=self.l2_n_std,name='b2_n')
-#                b2_n=b2+b2_noise
-#                
-#                layer2_n=tf.nn.leaky_relu(tf.matmul(layer1_n_n, w2_s_n) + b2_n)
-#                layer2_n=tf.nn.relu(tf.matmul(layer1_n_n, w2_s_n) + b2_n)
-#                layer2_n=tf.nn.softplus(tf.matmul(layer1_n_n, w2_s_n) + b2_n)
-                
-#                self.l2_w_n_hist=tf.summary.histogram('l2_a_w_n_',w2_s_n)
-#                self.summary_set.append(self.l2_w_n_hist)
-#                self.l2_b_n_hist=tf.summary.histogram('l2_a_b_n_',b2_n)
-#                self.summary_set.append(self.l2_b_n_hist)
-                
-#                self.l2_w_hist=tf.summary.histogram('l2_a_w_',w2_s)
-#                self.summary_set.append(self.l2_w_hist)
-#                self.l2_b_hist=tf.summary.histogram('l2_a_b_',b2)
-#                self.summary_set.append(self.l2_b_hist)
-                
-            with tf.variable_scope('l2_normalization'):
-                
-                layer2_n_n=tf.layers.batch_normalization(layer2,name='layer2_n_n_')
-#                self.l2_hist=tf.summary.histogram('l2_a_n_n_',layer2_n_n)
-#                self.summary_set.append(self.l2_hist)
-                
-            with tf.variable_scope('l2_dropout'):
-                
-                layer2_do=tf.nn.dropout(layer2_n_n,0.9) 
-#                self.l2_hist=tf.summary.histogram('l2_a_n_n_',layer2_n_n)
-#                self.summary_set.append(self.l2_hist)
-                
-            with tf.variable_scope('l3'):
-                
-                n_l3 = H3_a
-                w3_s = tf.get_variable('w3_s', [n_l2, n_l3], initializer=init_w, trainable=trainable)
-                b3 = tf.get_variable('b3', [1, n_l3], initializer=init_b, trainable=trainable)
-#                layer3 = tf.nn.softplus(tf.matmul(layer2, w3_s) + b3)
-#                layer3 = tf.nn.relu(tf.matmul(layer2, w3_s) + b3)
-                layer3 = tf.nn.leaky_relu(tf.matmul(layer2_do, w3_s) + b3)
-                
-#            with tf.variable_scope('l3_n'):
-#                w3_s_noise=tf.random_normal(w3_s.shape,stddev=self.l3_n_std,name='w3_s_n')
-#                w3_s_n=w3_s+w3_s_noise
-#                b3_noise=tf.random_normal(b3.shape,stddev=self.l3_n_std,name='b3_n')
-#                b3_n=b3+b3_noise
-##                layer3_n=tf.nn.softplus(tf.matmul(layer2_n_n, w3_s_n) + b3_n)
-##                layer3_n=tf.nn.relu(tf.matmul(layer2_n_n, w3_s_n) + b3_n)
-#                layer3_n=tf.nn.leaky_relu(tf.matmul(layer2_n_n, w3_s_n) + b3_n)
-                
-#                self.l3_w_n_hist=tf.summary.histogram('l3_a_w_n_',w3_s_n)
-#                self.summary_set.append(self.l3_w_n_hist)
-#                self.l3_b_n_hist=tf.summary.histogram('l3_a_b_n_',b3_n)
-#                self.summary_set.append(self.l3_b_n_hist)
-                
-#                self.l3_w_hist=tf.summary.histogram('l3_a_w_',w3_s)
-#                self.summary_set.append(self.l3_w_hist)
-#                self.l3_b_hist=tf.summary.histogram('l3_a_b_',b3)
-#                self.summary_set.append(self.l3_b_hist)
-                
-            with tf.variable_scope('l3_normalization'):
-                
-                layer3_n_n=tf.layers.batch_normalization(layer3,name='layer3_n_n_')
-#                self.l3_hist=tf.summary.histogram('l3_a_n_n_',layer3_n_n)
-#                self.summary_set.append(self.l3_hist)
-                
-            with tf.variable_scope('l3_dropout'):
-                
-                layer3_do=tf.nn.dropout(layer3_n_n,0.9) 
-#                self.l3_hist=tf.summary.histogram('l3_a_n_n_',layer3_n_n)
-#                self.summary_set.append(self.l3_hist)
-                
-            with tf.variable_scope('l4'):
-                
-                n_l4 = H4_a
-                w4_s = tf.get_variable('w4_s', [n_l3, n_l4], initializer=init_w, trainable=trainable)
-                b4 = tf.get_variable('b4', [1, n_l4], initializer=init_b, trainable=trainable)
-#                layer3 = tf.nn.softplus(tf.matmul(layer2, w3_s) + b3)
-#                layer3 = tf.nn.relu(tf.matmul(layer2, w3_s) + b3)
-                layer4 = tf.nn.leaky_relu(tf.matmul(layer3_do, w4_s) + b4)
-                
-#            with tf.variable_scope('l3_n'):
-#                w3_s_noise=tf.random_normal(w3_s.shape,stddev=self.l3_n_std,name='w3_s_n')
-#                w3_s_n=w3_s+w3_s_noise
-#                b3_noise=tf.random_normal(b3.shape,stddev=self.l3_n_std,name='b3_n')
-#                b3_n=b3+b3_noise
-##                layer3_n=tf.nn.softplus(tf.matmul(layer2_n_n, w3_s_n) + b3_n)
-##                layer3_n=tf.nn.relu(tf.matmul(layer2_n_n, w3_s_n) + b3_n)
-#                layer3_n=tf.nn.leaky_relu(tf.matmul(layer2_n_n, w3_s_n) + b3_n)
-                
-#                self.l3_w_n_hist=tf.summary.histogram('l3_a_w_n_',w3_s_n)
-#                self.summary_set.append(self.l3_w_n_hist)
-#                self.l3_b_n_hist=tf.summary.histogram('l3_a_b_n_',b3_n)
-#                self.summary_set.append(self.l3_b_n_hist)
-                
-#                self.l3_w_hist=tf.summary.histogram('l3_a_w_',w3_s)
-#                self.summary_set.append(self.l3_w_hist)
-#                self.l3_b_hist=tf.summary.histogram('l3_a_b_',b3)
-#                self.summary_set.append(self.l3_b_hist)
-                
-            with tf.variable_scope('l4_normalization'):
-                
-                layer4_n_n=tf.layers.batch_normalization(layer4,name='layer4_n_n_')
-#                self.l3_hist=tf.summary.histogram('l3_a_n_n_',layer3_n_n)
-#                self.summary_set.append(self.l3_hist)
-                
-            with tf.variable_scope('l4_dropout'):
-                
-                layer4_do=tf.nn.dropout(layer4_n_n,0.9) 
-#                self.l3_hist=tf.summary.histogram('l3_a_n_n_',layer3_n_n)
-#                self.summary_set.append(self.l3_hist)
-                
-#            layer2 = tf.layers.dense(layer1, H2, activation=tf.nn.softplus,kernel_initializer=init_w, bias_initializer=init_b, name='l2',trainable=trainable)
+            layer[0]=self._build_layer(H1_a, self.s_dim, s, 0, init_w, init_b, dropout_rate=0.1, parameter_noise=parameter_noise, \
+                     summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
             
-            with tf.variable_scope('a'):
-
-                n_la = self.a_dim
-#                w3_s = tf.get_variable('w1_s', [n_l1, n_lo], initializer=init_w, trainable=trainable)
-                wa_s = tf.get_variable('w1_s', [n_l4, n_la], initializer=init_w, trainable=trainable)
-                actions= tf.nn.tanh(0.1*tf.matmul(layer4_do, wa_s))
-#                actions= tf.nn.tanh(tf.matmul(layer1, w3_s))
+            layer[1]=self._build_layer(H2_a, H1_a, layer[0], 1, init_w,init_b, dropout_rate=0.1, parameter_noise=parameter_noise, \
+                     summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
+            
+            layer[2]=self._build_layer(H3_a, H2_a, layer[1], 2, init_w,init_b, dropout_rate=0.1, parameter_noise=parameter_noise, \
+                     summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
+            
+            layer[3]=self._build_layer(H4_a, H3_a, layer[2], 3, init_w,init_b, dropout_rate=0.1, parameter_noise=parameter_noise, \
+                     summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
+            
+            with tf.variable_scope('action'):
+            
+                w_collection_action = tf.get_variable('weight_actor_action', [H4_a, self.a_dim], initializer=init_w, trainable=trainable)
+                actions= tf.nn.tanh(0.1*tf.matmul(layer[3], w_collection_action))  
                 
-#                self.actions_hist=tf.summary.histogram('actions_',actions)
-#                self.summary_set.append(self.actions_hist)
-#                self.actions_w_hist=tf.summary.histogram('actions_w_',wa_s)
-#                self.summary_set.append(self.actions_w_hist)
+                if summeraize_parameter==True:
+                    
+                    a_w_hist=tf.summary.histogram('hist_weight_action',w_collection_action)
+                    self.summary_set.append(a_w_hist)
                 
-#            with tf.variable_scope('a_n'):
-#                
-#                actions_n= tf.nn.tanh(tf.matmul(layer3_n_n, wa_s))
-##                actions_n= tf.nn.tanh(tf.matmul(layer1_n_n, w3_s))
-#                
-#                self.actions_n_hist=tf.summary.histogram('actions_n',actions_n)
-#                self.summary_set.append(self.actions_n_hist)
-                
-#            with tf.variable_scope('a'):
-                
-#                actions = tf.layers.dense(layer2, self.a_dim, activation=tf.nn.tanh, kernel_initializer=init_w,name='a', trainable=trainable)
-#                actions = tf.layers.dense(layer2, self.a_dim, activation=tf.nn.softsign, kernel_initializer=init_w,
-#                                          name='a', trainable=trainable)
-                scaled_a = tf.multiply(actions, self.action_bound, name='scaled_a')  # Scale output to -action_bound to action_bound
-#                scaled_a_n = tf.multiply(actions_n, self.action_bound, name='scaled_a_n')
-                
-        return scaled_a
+                if summeraize_output==True:
+             
+                    actions_hist=tf.summary.histogram('hist_action',actions)
+                    self.summary_set.append(actions_hist)
+            
+                scaled_action = tf.multiply(actions, self.action_bound, name='scaled_action')  # Scale output to -action_bound to action_bound
+       
+            return scaled_action  
     
     def Merge_Summary_End(self,s,a_i,time_step,critic):
         
@@ -339,20 +306,21 @@ class Actor(object):
         
     def learn_Imitation(self, s,a_i):   # batch update
 #        self.sess.run(self.soft_replace)
-#        self.sess.run([self.train_imitation,self.p_loss_imitation], feed_dict={S: s,A_I:a_i})
+#        self.sess.run([self.train_imitation,self.print_loss_imitation], feed_dict={S: s,A_I:a_i})
         self.sess.run(self.train_imitation, feed_dict={S: s,A_I:a_i})
 #        if self.t_replace_counter == self.t_replace_iter:
 #            self.sess.run([tf.assign(t, e) for t, e in zip(self.t_params, self.e_params)])
 #            self.t_replace_counter = 0
 #        self.t_replace_counter += 1
-    def choose_action(self, s,critic,ep_total):
+    def choose_action(self, s):
         
         s = s[np.newaxis, :]    # single state
 #        _,a=self.sess.run([self.p_layer1_n_n,self.a],feed_dict={S: s,S_: s})
         a=self.sess.run(self.a,feed_dict={S: s})
-        self.l1_n_std=tf.multiply(self.l1_n_std, self.std_decay)
-        self.l2_n_std=tf.multiply(self.l2_n_std, self.std_decay)
-        
+        for i in range(0,self.number_of_hidden_layers):
+            
+            self.layer_noise_std[i]=tf.multiply(self.layer_noise_std[i], self.std_decay)
+
         return a[0]  # single action
 
     def add_grad_to_graph(self, a_grads):
@@ -365,14 +333,14 @@ class Actor(object):
             
         with tf.variable_scope('A_train'):
             
-            opt = tf.train.MomentumOptimizer(self.lr,self.Momentum)# (- learning rate) for ascent policy
+            opt = tf.train.MomentumOptimizer(self.lr_r,self.momentum)# (- learning rate) for ascent policy
 #            opt = tf.train.AdamOptimizer(-self.lr)  # (- learning rate) for ascent policy
             self.train_op = opt.apply_gradients(zip(self.policy_grads, self.e_params))
 
 
 class Critic(object):
     
-    def __init__(self, sess, action_dim,state_dim, learning_rate, gamma, t_replace_iter,a, a_,C_TD):
+    def __init__(self, sess, action_dim,state_dim, learning_rate, gamma ,a, a_,t_replace_iter,C_TD):
         
         self.sess = sess
         self.s_dim = state_dim
@@ -399,7 +367,7 @@ class Critic(object):
         self.summary_set=[]
 #        self.summary_step=0
 
-        self.writer = tf.summary.FileWriter("/home/spikezz/Driverless/aktuelle zustand/RL_Driverless/src_c/logs")
+        self.writer = tf.summary.FileWriter("/home/spikezz/RL project copy/Driverless/src_c/logs")
         
         
         with tf.variable_scope('Critic'):
@@ -412,7 +380,8 @@ class Critic(object):
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Critic/eval_net')
         self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Critic/target_net')
-
+        self.soft_replace = [tf.assign(t, (1 - TAU_C) * t + TAU_C * e) for t, e in zip(self.t_params, self.e_params)]
+        
         with tf.variable_scope('target_q'):
             
             R_mean=[0,0,0]
@@ -451,8 +420,7 @@ class Critic(object):
             self.a_grads = 20*tf.gradients(self.q, a)[0]   # tensor of gradients of each sample (None, a_dim)
 #            self.a_grads_hist=tf.summary.histogram('a_grads_',self.a_grads)
 #            self.summary_set.append(self.a_grads_hist)
-            
-        self.soft_replace = [tf.assign(t, (1 - TAU_C) * t + TAU_C * e) for t, e in zip(self.t_params, self.e_params)]
+    
         
     def _build_net(self, s, a, scope, trainable):
         
@@ -460,8 +428,8 @@ class Critic(object):
             
 #            init_w=tf.random_uniform_initializer(-0.9,0.9)
 #            init_b=tf.random_uniform_initializer(-0.15,0.15)
-            init_w = tf.contrib.layers.xavier_initializer(uniform=False)
-            init_b = tf.contrib.layers.xavier_initializer(uniform=False)
+            init_w = tf.keras.initializers.glorot_normal(seed=None)
+            init_b = tf.keras.initializers.glorot_normal(seed=None)
 #            init_w=tf.random_normal_initializer(0,0.05)
 #            init_b=tf.random_normal_initializer(0,0.05)
 #            init_w = tf.keras.initializers.he_normal()
@@ -473,10 +441,11 @@ class Critic(object):
                 w1_s = tf.get_variable('w1_s', [self.s_dim, n_l1], initializer=init_w, trainable=trainable)
                 w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1], initializer=init_w, trainable=trainable)
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=init_b, trainable=trainable)
-#                layer1 = tf.nn.relu(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1)
-                s_n=tf.layers.batch_normalization(s,name='s_normalize_c')
-                a_n=tf.layers.batch_normalization(a,name='a_normalize_c')
-                layer1 = tf.nn.leaky_relu(tf.matmul(s_n, w1_s) + tf.matmul(a_n, w1_a) + b1)
+                layer1 = tf.nn.leaky_relu(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1)
+                
+#                s_n=tf.layers.batch_normalization(s,name='s_normalize_c')
+#                a_n=tf.layers.batch_normalization(a,name='a_normalize_c')
+#                layer1 = tf.nn.leaky_relu(tf.matmul(s_n, w1_s) + tf.matmul(a_n, w1_a) + b1)
                 
 #                self.l1_ws_hist=tf.summary.histogram('l1_c_ws_',w1_s)
 #                self.summary_set.append(self.l1_ws_hist)
@@ -484,19 +453,19 @@ class Critic(object):
 #                self.summary_set.append(self.l1_wa_hist)
 #                self.l1_b_hist=tf.summary.histogram('l1_c_b_',b1)
 #                self.summary_set.append(self.l1_b_hist)
-                
-            with tf.variable_scope('l1_normalization'):
-                
-                layer1_n=tf.layers.batch_normalization(layer1,name='layer1_n_')
-                self.l1_hist=tf.summary.histogram('l1_c_n_',layer1_n)
-                self.summary_set.append(self.l1_hist)
+#                
+#            with tf.variable_scope('l1_normalization'):
+#                
+#                layer1_n=tf.layers.batch_normalization(layer1,name='layer1_n_')
+#                self.l1_hist=tf.summary.histogram('l1_c_n_',layer1_n)
+#                self.summary_set.append(self.l1_hist)
                 
             with tf.variable_scope('l2'):
                 n_l2 = H2_c
                 w2_s = tf.get_variable('w2_s', [n_l1, n_l2], initializer=init_w, trainable=trainable)
                 b2 = tf.get_variable('b2', [1, n_l2], initializer=init_b, trainable=trainable)
-#                layer2 = tf.nn.relu(tf.matmul(layer1, w2_s) + b2)
-                layer2 = tf.nn.leaky_relu(tf.matmul(layer1_n, w2_s) + b2)
+                layer2 = tf.nn.leaky_relu(tf.matmul(layer1, w2_s) + b2)
+#                layer2 = tf.nn.leaky_relu(tf.matmul(layer1_n, w2_s) + b2)
                 
 #                self.l2_w_hist=tf.summary.histogram('l2_c_w_',w2_s)
 #                self.summary_set.append(self.l2_w_hist)
@@ -504,9 +473,9 @@ class Critic(object):
 #                self.summary_set.append(self.l2_b_hist)
                 
 
-            with tf.variable_scope('l2_normalization'):
-                
-                layer2_n=tf.layers.batch_normalization(layer2,name='layer2_n_')
+#            with tf.variable_scope('l2_normalization'):
+#                
+#                layer2_n=tf.layers.batch_normalization(layer2,name='layer2_n_')
 #                self.l2_hist=tf.summary.histogram('l2_c_n_',layer2_n)
 #                self.summary_set.append(self.l2_hist)
                 
@@ -514,17 +483,17 @@ class Critic(object):
                 n_l3 = H3_c
                 w3_s = tf.get_variable('w3_s', [n_l2, n_l3], initializer=init_w, trainable=trainable)
                 b3 = tf.get_variable('b3', [1, n_l3], initializer=init_b, trainable=trainable)
-#                layer3 = tf.nn.relu(tf.matmul(layer2, w3_s) + b3)
-                layer3 = tf.nn.leaky_relu(tf.matmul(layer2_n, w3_s) + b3)
+                layer3 = tf.nn.leaky_relu(tf.matmul(layer2, w3_s) + b3)
+#                layer3 = tf.nn.leaky_relu(tf.matmul(layer2_n, w3_s) + b3)
 
 #                self.l3_w_hist=tf.summary.histogram('l3_c_w_',w3_s)
 #                self.summary_set.append(self.l3_w_hist)
 #                self.l3_b_hist=tf.summary.histogram('l3_c_b_',b3)
 #                self.summary_set.append(self.l3_b_hist)              
 
-            with tf.variable_scope('l3_normalization'):
-                
-                layer3_n=tf.layers.batch_normalization(layer3,name='layer3_n_')
+#            with tf.variable_scope('l3_normalization'):
+#                
+#                layer3_n=tf.layers.batch_normalization(layer3,name='layer3_n_')
 #                self.l3_hist=tf.summary.histogram('l3_c_n_',layer3_n)
 #                self.summary_set.append(self.l3_hist)
                 
@@ -543,8 +512,8 @@ class Critic(object):
 
                 wq_s = tf.get_variable('wq_s', [n_l3, 1], initializer=init_w, trainable=trainable)
 #                bq = tf.get_variable('bq', [1, 1], initializer=init_b, trainable=trainable)
-                q = tf.matmul(layer3_n, wq_s)
-                
+#                q = tf.matmul(layer3_n, wq_s)
+                q = tf.matmul(layer3, wq_s)
 #                self.q_hist=tf.summary.histogram('q_hist_',q)
 #                self.summary_set.append(self.q_hist)
 #                self.q_w_hist=tf.summary.histogram('q_c_w_',wq_s)

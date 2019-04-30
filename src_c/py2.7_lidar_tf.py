@@ -89,9 +89,11 @@ lidar_frame_id='lidar'
 rate = rp.Rate(60)
 #
 while not rp.is_shutdown():
+    
     print("im running")
+    
     rp.Subscriber('Odometry_auto',Odometry,handle_lidar_pose,lidar_frame_id)
-    rp.Subscriber('stitched_cloud',PointCloud2,handle_pointclound,lidar_frame_id)
-#    rp.Subscriber('velodyne_points',PointCloud2,handle_lidar_pose,lidar_frame_id)
+    rp.Subscriber('lidardata',PointCloud2,handle_pointclound,lidar_frame_id)
+
     rp.spin()
     rate.sleep()

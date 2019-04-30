@@ -105,7 +105,7 @@ def ros_car_state_message_creater(rospy,car_state,initial_velocoty_noise):
     
     (eul_msg.x, eul_msg.y, eul_msg.z) = cal.euler_from_quaternion([odo_msg.pose.pose.orientation.x, odo_msg.pose.pose.orientation.y, odo_msg.pose.pose.orientation.z, odo_msg.pose.pose.orientation.w])
     ros_state_message_.append(eul_msg)
-    
+
     return ros_state_message_
 
     

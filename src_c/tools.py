@@ -12,18 +12,18 @@ import matplotlib.pyplot as plt
 
 class Saver(object):
     
-    def __init__(self,sess,load,actor,critic,all_var,reinforcement):
+    def __init__(self,sess,load,actor,critic,all_var,agent_i=False, agent_r=False):
         
         List_net=[]
-        List_at=[v for v in actor.t_params]
         List_ae=[v for v in actor.e_params]
-        List_net.extend(List_at)
         List_net.extend(List_ae)
         
-        if reinforcement:
+        if agent_r:
             
+            List_at=[v for v in actor.t_params]
             List_ct=[v for v in critic.t_params]
             List_ce=[v for v in critic.e_params]
+            List_net.extend(List_at)
             List_net.extend(List_ct)
             List_net.extend(List_ce)
         
@@ -36,7 +36,6 @@ class Saver(object):
             self.saver=tf.train.Saver(var_list=List_net,max_to_keep=10000)
             
         self.LOAD = load
-        #LOAD = True
         self.MODE = ['0']
         self.n_model = 0
 #        self.di = './Model/Model_'+self.MODE[self.n_model]
