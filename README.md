@@ -6,7 +6,7 @@ further progress of Driverless Project
 
     Inthalt:
     
-    1. 2D simulationsumgebung basiert auf pygame
+    1. Imitation learning Algorithmus
     
     2. reinforcement learning Algorithmus:
     
