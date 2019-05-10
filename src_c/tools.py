@@ -9,6 +9,7 @@ import tensorflow as tf
 import os
 import shutil
 import matplotlib.pyplot as plt
+import csv
 
 class Saver(object):
     
@@ -82,6 +83,7 @@ class Saver(object):
 class Ploter(object):
     
     def __init__(self,xlim,ylim,fig_size):
+        
         self.fig = plt.figure(figsize=fig_size)
         self.fig.show()
         self.ax = self.fig.add_subplot(1,1,1)
@@ -91,111 +93,181 @@ class Ploter(object):
             
         plt.ion()
     
-        
 class Summary(object):
     
-    def summary(self,LOAD,var,pointer,capacity,reward_ep,running_reward,
-                running_reward_max,reward_mean,rr_idx,max_reward_reset,
-                action_ori,actor,reward_one_ep_mean,rr,critic,reward_mean_max_rate,ep_lr,time_set):
+    class Summary_Ploter(object):
         
-        print("LOAD:",LOAD)
-        print("critic.rank_TD_max:",critic.rank_TD_max,"critic.rank_TD_min:",critic.rank_TD_min)
-#        print("FPS:",clock.get_fps())
-        print("var0:",var[0],"var1:",var[1],"var2:",var[2])
-        print("MEMORY_pointer:",pointer)
-        print("MEMORY_CAPACITY:",capacity)
-        print("running_reward:",running_reward)
-        print("max_running_reward:",running_reward_max)
-        print("reward_mean:",reward_mean[rr_idx-1])
-        print("max_reward_reset:",max_reward_reset)
-        print("lr ep :",ep_lr)
+        def __init__(self, row, column):
+            
+            self.fig = plt.figure()
+            self.fig.show()
+            self.ax=[None]*(row*column)
+            
+            for i in range(0,row*column):
+                
+                self.ax[i] = self.fig.add_subplot(row,column,i+1)
+                
+            self.fig.subplots_adjust(left=0.05, bottom=0.05, right=0.95, top=0.95) 
+            plt.ion()
+        
+#    def plot_summary(self,LOAD,var,pointer,capacity,reward_ep,running_reward,
+#                running_reward_max,reward_mean,rr_idx,max_reward_reset,
+#                action_ori,actor,reward_one_ep_mean,rr,critic,reward_mean_max_rate,ep_lr,time_set):
+#        
+#        print("LOAD:",LOAD)
+#        print("critic.rank_TD_max:",critic.rank_TD_max,"critic.rank_TD_min:",critic.rank_TD_min)
+##        print("FPS:",clock.get_fps())
+#        print("var0:",var[0],"var1:",var[1],"var2:",var[2])
+#        print("MEMORY_pointer:",pointer)
+#        print("MEMORY_CAPACITY:",capacity)
+#        print("running_reward:",running_reward)
+#        print("max_running_reward:",running_reward_max)
+#        print("reward_mean:",reward_mean[rr_idx-1])
+#        print("max_reward_reset:",max_reward_reset)
+#        print("lr ep :",ep_lr)
          #accelerate 
-        plt.figure()
-        plt.subplot(211)
-        plt.plot(action_ori[0])  
-        plt.xlabel('steps')
-        plt.ylabel('a0 output')
-        plt.subplot(212)
-        plt.plot(actor.accelerate)  
-        plt.xlabel('steps')
-        plt.ylabel('accelerate')
-        #accelerate      
+    def __init__(self):
+        pass
+        self.action_ploter=self.Summary_Ploter(row=1, column=3)
+        self.speed_ploter=self.Summary_Ploter(row=1, column=1)
+        self.cross_position_ploter=self.Summary_Ploter(row=1, column=1)
+        self.predict_angle_ploter=self.Summary_Ploter(row=1, column=1)
         
-        #brake
-        plt.figure()
-        plt.subplot(211)
-        plt.plot(action_ori[1])  
-        plt.xlabel('steps')
-        plt.ylabel('a1 output')
-        plt.subplot(212)
-        plt.plot(actor.brake)  
-        plt.xlabel('steps')
-        plt.ylabel('brake')
-        #brake
-        
-        #steering angle
-        plt.figure()
-        plt.subplot(211)
-        plt.plot(action_ori[2])  
-        plt.xlabel('steps')
-        plt.ylabel('a2 output')
-        plt.subplot(212)
-        plt.plot(actor.angle)  
-        plt.xlabel('steps')
-        plt.ylabel('angle')
-        #steering angle
-        
-        #probability
-        plt.figure()
-        plt.subplot(311)
-        plt.plot(action_ori[3])  
-        plt.xlabel('steps')
-        plt.ylabel('p accelerate')
-        plt.subplot(312)
-        plt.plot(action_ori[4])  
-        plt.xlabel('steps')
-        plt.ylabel('p brake')
-        plt.subplot(313)
-        plt.plot(action_ori[5])  
-        plt.xlabel('steps')
-        plt.ylabel('p idle')
-        #probability
-        
-        
-        #reward
-        plt.figure()
-        plt.subplot(211)
-        plt.plot(reward_ep)  
-        plt.xlabel('steps')
-        plt.ylabel('reward one ep')
-        plt.subplot(212)
-        plt.plot(reward_one_ep_mean)  
-        plt.xlabel('episode steps')
-        plt.ylabel('reward mean for one ep')
-        plt.figure()
-        plt.subplot(311)
-        plt.plot(rr)  
-        plt.xlabel('episode steps')
-        plt.ylabel('runing reward whole episode')
-        plt.subplot(312)
-        plt.plot(reward_mean)  
-        plt.xlabel('episode steps')
-        plt.ylabel('reward_mean')
-        plt.subplot(313)
-        plt.plot(reward_mean_max_rate)  
-        plt.xlabel('episode steps')
-        plt.ylabel('reward Max/mean')
-        
-        plt.figure()
-        plt.subplot(211)
-        plt.plot(critic.model_localization)
-        plt.xlabel('learning steps')
-        plt.ylabel('model_localization')
-        plt.subplot(212)
-        plt.plot(time_set)
-        plt.xlabel('cycle steps')
-        plt.ylabel('time_set')
+    def writer_data(self,agent,odm_msg_set,eul_msg_set,time_set):
+  
+        with open('motor_model.csv', 'w', newline='') as m:
+            
+            writer_motor = csv.writer(m)
+            
+            for i in range(0,len(time_set)):
+                
+                input_output_motor=[agent.actor.throttle_controller[i],agent.actor.speed[i]]
+                
+                writer_motor.writerow(input_output_motor)
+                
+ 
+        with open('auto_dynamic.csv', 'w', newline='') as f:
+            
+            writer_auto_dynamic = csv.writer(f)
+            for i in range(0,len(time_set)):
+                
+                action_state_turple=[time_set[i],agent.actor.throttle_controller[i],agent.actor.brake_controller[i],\
+                                     agent.actor.steering_angle_controller[i],odm_msg_set[i].header.stamp.secs,\
+                                     odm_msg_set[i].header.stamp.nsecs,odm_msg_set[i].pose.pose.position.x,\
+                                     odm_msg_set[i].pose.pose.position.y,eul_msg_set[i].z,odm_msg_set[i].twist.twist.linear.x,\
+                                     odm_msg_set[i].twist.twist.linear.y,odm_msg_set[i].twist.twist.angular.z]                                
+                
+                writer_auto_dynamic.writerow(action_state_turple)
 
+#            writer.writerows(agent)
+    def plot_summary(self,agent):
         
-        plt.show()
+        #accelerate
+        self.action_ploter.ax[0].plot(agent.actor.throttle_controller,'r',linewidth=0.5)
+        self.action_ploter.ax[0].plot(agent.actor.throttle_imitation,'g',linewidth=0.5)
+        self.action_ploter.ax[0].set_xlabel('steps')
+        self.action_ploter.ax[0].set_ylabel('throttle_controller-red/throttle_imitation-green')
+        #accelerate
+
+        ##brake
+        self.action_ploter.ax[1].plot(agent.actor.brake_controller,'r')
+        self.action_ploter.ax[1].plot(agent.actor.brake_imitation,'g',linewidth=0.5)
+        self.action_ploter.ax[1].set_xlabel('steps')
+        self.action_ploter.ax[1].set_ylabel('brake_controller-red/brake_imitation-green')
+        ##brake
+
+        #steering
+        self.action_ploter.ax[2].plot(agent.actor.steering_angle_controller,'r')
+        self.action_ploter.ax[2].plot(agent.actor.steering_angle_imitation,'g',linewidth=0.5)
+        self.action_ploter.ax[2].set_xlabel('steps')
+        self.action_ploter.ax[2].set_ylabel('steering_angle_controller-red/steering_angle_imitation-green')
+        #steering
+
+        self.action_ploter.fig = plt.gcf() 
+        self.action_ploter.fig.canvas.draw() 
+        self.action_ploter.fig.canvas.flush_events() 
         
+        #speed    
+        self.speed_ploter.ax[0].plot(agent.actor.speed,'r',linewidth=0.5)
+        self.speed_ploter.ax[0].plot(agent.actor.set_point_speed,'g',linewidth=0.5)
+        self.speed_ploter.ax[0].set_xlabel('steps')
+        self.speed_ploter.ax[0].set_ylabel('speed-red/set_point_speed-green')
+
+        self.speed_ploter.fig = plt.gcf() 
+        self.speed_ploter.fig.canvas.draw() 
+        self.speed_ploter.fig.canvas.flush_events() 
+        
+        #cross position   
+        self.cross_position_ploter.ax[0].plot(agent.actor.lateral_position,'r',linewidth=0.5)
+        self.cross_position_ploter.ax[0].plot(agent.actor.set_point_lateral_position,'g',linewidth=0.5)
+        self.cross_position_ploter.ax[0].set_xlabel('steps')
+        self.cross_position_ploter.ax[0].set_ylabel('cross_position-red/set_point_cross_position-green')
+
+        self.cross_position_ploter.fig = plt.gcf() 
+        self.cross_position_ploter.fig.canvas.draw() 
+        self.cross_position_ploter.fig.canvas.flush_events() 
+        
+        #predict angle 
+        self.predict_angle_ploter.ax[0].plot(agent.actor.predict_angle_diffrence,'r',linewidth=0.5)
+        self.predict_angle_ploter.ax[0].plot(agent.actor.set_point_predict_angle_diffrence,'g',linewidth=0.5)
+        self.predict_angle_ploter.ax[0].set_xlabel('steps')
+        self.predict_angle_ploter.ax[0].set_ylabel('predict_angle_diffrence-red/set_point_predict_angle_diffrence-green')
+
+        self.predict_angle_ploter.fig = plt.gcf() 
+        self.predict_angle_ploter.fig.canvas.draw() 
+        self.predict_angle_ploter.fig.canvas.flush_events() 
+        
+#        #probability
+#        plt.figure()
+#        plt.subplot(311)
+#        plt.plot(action_ori[3])  
+#        plt.xlabel('steps')
+#        plt.ylabel('p accelerate')
+#        plt.subplot(312)
+#        plt.plot(action_ori[4])  
+#        plt.xlabel('steps')
+#        plt.ylabel('p brake')
+#        plt.subplot(313)
+#        plt.plot(action_ori[5])  
+#        plt.xlabel('steps')
+#        plt.ylabel('p idle')
+#        #probability
+#        
+#        
+#        #reward
+#        plt.figure()
+#        plt.subplot(211)
+#        plt.plot(reward_ep)  
+#        plt.xlabel('steps')
+#        plt.ylabel('reward one ep')
+#        plt.subplot(212)
+#        plt.plot(reward_one_ep_mean)  
+#        plt.xlabel('episode steps')
+#        plt.ylabel('reward mean for one ep')
+#        plt.figure()
+#        plt.subplot(311)
+#        plt.plot(rr)  
+#        plt.xlabel('episode steps')
+#        plt.ylabel('runing reward whole episode')
+#        plt.subplot(312)
+#        plt.plot(reward_mean)  
+#        plt.xlabel('episode steps')
+#        plt.ylabel('reward_mean')
+#        plt.subplot(313)
+#        plt.plot(reward_mean_max_rate)  
+#        plt.xlabel('episode steps')
+#        plt.ylabel('reward Max/mean')
+#        
+#        plt.figure()
+#        plt.subplot(211)
+#        plt.plot(critic.model_localization)
+#        plt.xlabel('learning steps')
+#        plt.ylabel('model_localization')
+#        plt.subplot(212)
+#        plt.plot(time_set)
+#        plt.xlabel('cycle steps')
+#        plt.ylabel('time_set')
+#
+#        
+#        plt.show()
+#        

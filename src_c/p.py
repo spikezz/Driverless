@@ -723,7 +723,8 @@ while not rp.is_shutdown():
         qua_msg.x=odo_msg.pose.pose.orientation.x
         qua_msg.y=odo_msg.pose.pose.orientation.y
         qua_msg.z=odo_msg.pose.pose.orientation.z
-          
+        
+        act_msg.data.append(rospy.get_rostime())
         act_msg.data.append(car_controls.throttle)
         act_msg.data.append(car_controls.brake)
         act_msg.data.append(car_controls.steering)

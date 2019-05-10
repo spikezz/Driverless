@@ -62,12 +62,20 @@ class Actor(object):
         
         self.number_of_hidden_layers=4
         
+        self.odm_msg=[]
+        self.eul_msg=[]
         self.steering_angle_controller=[]
         self.steering_angle_imitation=[]
         self.throttle_controller=[]
         self.throttle_imitation=[]
         self.brake_controller=[]
         self.brake_imitation=[]
+        self.speed=[]
+        self.set_point_speed=[]
+        self.lateral_position=[]
+        self.set_point_lateral_position=[]
+        self.predict_angle_diffrence=[]
+        self.set_point_predict_angle_diffrence=[]
         
         self.writer = tf.summary.FileWriter("/home/spikezz/RL project copy/Driverless/src_c/logs")
         
@@ -86,7 +94,7 @@ class Actor(object):
         with tf.variable_scope(self.scope_name):
             
             # input s, output a    
-            self.a = self._build_net(S, parameter_noise=False, summeraize_parameter=False,summeraize_output=False,\
+            self.a = self._build_net(S,dropout_rate=0.1, parameter_noise=False, summeraize_parameter=False,summeraize_output=False,\
                                      scope='evaluation_net', trainable=True)
             
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name+'/evaluation_net')
@@ -120,7 +128,7 @@ class Actor(object):
             
             if agent_r:
                             # input s_, output a_, get a_ for critic
-                self.a_ = self._build_net(S_, parameter_noise=False, summeraize_parameter=False,summeraize_output=False,\
+                self.a_ = self._build_net(S_,dropout_rate=0, parameter_noise=False, summeraize_parameter=False,summeraize_output=False,\
                                       scope='target_net', trainable=False)
                 
                 self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name+'/target_net')
@@ -139,7 +147,7 @@ class Actor(object):
                         self.noise_min[i]=tf.constant_initializer(-0.002) 
                         self.noise_max[i]=tf.constant_initializer(0.002) 
                 
-                self.a_noise = self._build_net(S_, parameter_noise=True, summeraize_parameter=False,summeraize_output=False,\
+                self.a_noise = self._build_net(S_,dropout_rate=0.1, parameter_noise=True, summeraize_parameter=False,summeraize_output=False,\
                                       scope='evaluation_net_with_parameter_noise', trainable=False)
                 self.error_parameter_noise=tf.reduce_mean(tf.squared_difference(self.a, self.a_noise))
                 
@@ -154,7 +162,7 @@ class Actor(object):
 
         self.sess.run(self.parameter_copy_noise_net)        
         
-    def _build_layer(self, hidden_neuro_dim, layer_input_dim,layer_input,layer_idx,initializer_w,initializer_b, dropout_rate=0.1, \
+    def _build_layer(self, hidden_neuro_dim, layer_input_dim,layer_input,layer_idx,initializer_w,initializer_b, dropout_rate=0, \
                      parameter_noise=False,summeraize_parameter=False, summeraize_output=False, trainable=None): 
         if parameter_noise:
             
@@ -240,7 +248,7 @@ class Actor(object):
                         
                 return layer_output
                             
-    def _build_net(self, s, parameter_noise=False, summeraize_parameter=False, summeraize_output=False, scope=None, trainable=None):
+    def _build_net(self, s,dropout_rate=0.1, parameter_noise=False, summeraize_parameter=False, summeraize_output=False, scope=None, trainable=None):
         
         with tf.variable_scope(scope):
             
@@ -256,16 +264,16 @@ class Actor(object):
                 
             layer=[None]*(self.number_of_hidden_layers)
             
-            layer[0]=self._build_layer(H1_a, self.s_dim, s, 0, init_w, init_b, dropout_rate=0.1, parameter_noise=parameter_noise, \
+            layer[0]=self._build_layer(H1_a, self.s_dim, s, 0, init_w, init_b, dropout_rate=dropout_rate, parameter_noise=parameter_noise, \
                      summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
             
-            layer[1]=self._build_layer(H2_a, H1_a, layer[0], 1, init_w,init_b, dropout_rate=0.1, parameter_noise=parameter_noise, \
+            layer[1]=self._build_layer(H2_a, H1_a, layer[0], 1, init_w,init_b, dropout_rate=dropout_rate, parameter_noise=parameter_noise, \
                      summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
             
-            layer[2]=self._build_layer(H3_a, H2_a, layer[1], 2, init_w,init_b, dropout_rate=0.1, parameter_noise=parameter_noise, \
+            layer[2]=self._build_layer(H3_a, H2_a, layer[1], 2, init_w,init_b, dropout_rate=dropout_rate, parameter_noise=parameter_noise, \
                      summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
             
-            layer[3]=self._build_layer(H4_a, H3_a, layer[2], 3, init_w,init_b, dropout_rate=0.1, parameter_noise=parameter_noise, \
+            layer[3]=self._build_layer(H4_a, H3_a, layer[2], 3, init_w,init_b, dropout_rate=dropout_rate, parameter_noise=parameter_noise, \
                      summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
             
             with tf.variable_scope('action'):
@@ -312,14 +320,17 @@ class Actor(object):
 #            self.sess.run([tf.assign(t, e) for t, e in zip(self.t_params, self.e_params)])
 #            self.t_replace_counter = 0
 #        self.t_replace_counter += 1
-    def choose_action(self, s):
+    def choose_action(self, s, agent_i=False, agent_r=False):
         
         s = s[np.newaxis, :]    # single state
 #        _,a=self.sess.run([self.p_layer1_n_n,self.a],feed_dict={S: s,S_: s})
         a=self.sess.run(self.a,feed_dict={S: s})
-        for i in range(0,self.number_of_hidden_layers):
+        
+        if agent_r:
             
-            self.layer_noise_std[i]=tf.multiply(self.layer_noise_std[i], self.std_decay)
+            for i in range(0,self.number_of_hidden_layers):
+                
+                self.layer_noise_std[i]=tf.multiply(self.layer_noise_std[i], self.std_decay)
 
         return a[0]  # single action
 

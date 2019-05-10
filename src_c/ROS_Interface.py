@@ -5,11 +5,14 @@ Created on Fri Mar 29 21:05:50 2019
 
 @author: spikezz
 """
-import calculate as cal
 from geometry_msgs.msg import Vector3, Quaternion, PoseArray, Pose, QuaternionStamped, TwistStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32MultiArray
 from sensor_msgs.msg import Image, PointCloud2
+from airsim import ImageRequest
+import airsim
+import numpy as np
+import calculate as cal
 
 def define_ros_publisher(rp):
     
@@ -32,8 +35,33 @@ def define_ros_publisher(rp):
     
     return ros_publisher
 
-def ros_car_state_message_creater(rospy,car_state,initial_velocoty_noise):
+def ros_car_state_message_creater(rospy,client,initial_velocoty_noise,image=False):
     
+    if image==True:
+        
+        responses = client.simGetImages([ImageRequest("0", airsim.ImageType.Scene, False, False)])
+        response = responses[0]
+    
+        img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
+        
+        try:
+            
+            img_rgba = img1d.reshape(response.height, response.width, 4)
+            img_rgba = np.flipud(img_rgba)
+#            airsim.write_png(os.path.normpath('greener.png'), img_rgba) 
+            img_rgba = np.flipud(img_rgba)	
+            image_msg = Image()
+            image_msg.height = img_rgba.shape[0];
+            image_msg.width =  img_rgba.shape[1];
+            image_msg.encoding = 'rgba8';
+            image_msg.step = img_rgba.shape[0]*img_rgba.shape[1]*4
+            image_msg.data = img_rgba.tobytes();
+                
+        except:
+            
+            print("Image acquisition failed")
+    
+    car_state = client.getCarState()
     ros_state_message_=[]
     msg_time=rospy.get_rostime()
     tws_msg=TwistStamped()
@@ -50,7 +78,7 @@ def ros_car_state_message_creater(rospy,car_state,initial_velocoty_noise):
     vel_msg.y=car_state.kinematics_estimated.linear_velocity.y_val-initial_velocoty_noise[1]
     vel_msg.z=car_state.kinematics_estimated.linear_velocity.z_val-initial_velocoty_noise[2]
     ros_state_message_.append(vel_msg)
-    
+
     a_v_msg.w=car_state.kinematics_estimated.angular_velocity.to_Quaternionr().w_val
     a_v_msg.x=car_state.kinematics_estimated.angular_velocity.to_Quaternionr().x_val
     a_v_msg.y=car_state.kinematics_estimated.angular_velocity.to_Quaternionr().y_val
@@ -101,11 +129,22 @@ def ros_car_state_message_creater(rospy,car_state,initial_velocoty_noise):
     odo_msg.pose.pose.orientation.x=car_state.kinematics_estimated.orientation.x_val
     odo_msg.pose.pose.orientation.y=car_state.kinematics_estimated.orientation.y_val
     odo_msg.pose.pose.orientation.z=car_state.kinematics_estimated.orientation.z_val
+    odo_msg.twist.twist.linear.x=vel_msg.x
+    odo_msg.twist.twist.linear.y=vel_msg.y
+    odo_msg.twist.twist.linear.z=vel_msg.z
+    odo_msg.twist.twist.angular.x=euv_msg.x
+    odo_msg.twist.twist.angular.y=euv_msg.y
+    odo_msg.twist.twist.angular.z=euv_msg.z
     ros_state_message_.append(odo_msg)
     
     (eul_msg.x, eul_msg.y, eul_msg.z) = cal.euler_from_quaternion([odo_msg.pose.pose.orientation.x, odo_msg.pose.pose.orientation.y, odo_msg.pose.pose.orientation.z, odo_msg.pose.pose.orientation.w])
     ros_state_message_.append(eul_msg)
-
+    
+    if image==True:
+        try:
+            ros_state_message_.append(image_msg)
+        except:
+            pass
     return ros_state_message_
 
     
