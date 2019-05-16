@@ -76,6 +76,9 @@ class Actor(object):
         self.set_point_lateral_position=[]
         self.predict_angle_diffrence=[]
         self.set_point_predict_angle_diffrence=[]
+        self.predict_curverature_measured=[]
+        self.predict_curverature=[]
+        self.open_close_control_rate=[]
         
         self.writer = tf.summary.FileWriter("/home/spikezz/RL project copy/Driverless/src_c/logs")
         

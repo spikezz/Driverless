@@ -13,12 +13,14 @@ from airsim import ImageRequest
 import airsim
 import numpy as np
 import calculate as cal
+#import os
+#import matplotlib.pyplt as plt
 
 def define_ros_publisher(rp):
     
     rp.init_node('publish', anonymous=True)
                  
-    ros_publisher={'pub_Image':rp.Publisher('UnrealImage', Image, queue_size=1),\
+    ros_publisher={'pub_Image':rp.Publisher('UnrealImage', Image, queue_size=15),\
                    'pub_euler':rp.Publisher('O_to_E', Vector3, queue_size=1),\
                    'pub_velocity':rp.Publisher('velocity', Vector3, queue_size=1),\
                    'pub_acceleration':rp.Publisher('acceleration', Vector3, queue_size=1),\
@@ -35,31 +37,7 @@ def define_ros_publisher(rp):
     
     return ros_publisher
 
-def ros_car_state_message_creater(rospy,client,initial_velocoty_noise,image=False):
-    
-    if image==True:
-        
-        responses = client.simGetImages([ImageRequest("0", airsim.ImageType.Scene, False, False)])
-        response = responses[0]
-    
-        img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
-        
-        try:
-            
-            img_rgba = img1d.reshape(response.height, response.width, 4)
-            img_rgba = np.flipud(img_rgba)
-#            airsim.write_png(os.path.normpath('greener.png'), img_rgba) 
-            img_rgba = np.flipud(img_rgba)	
-            image_msg = Image()
-            image_msg.height = img_rgba.shape[0];
-            image_msg.width =  img_rgba.shape[1];
-            image_msg.encoding = 'rgba8';
-            image_msg.step = img_rgba.shape[0]*img_rgba.shape[1]*4
-            image_msg.data = img_rgba.tobytes();
-                
-        except:
-            
-            print("Image acquisition failed")
+def ros_car_state_message_creater(rospy,client,initial_velocoty_noise,seq,image=False):
     
     car_state = client.getCarState()
     ros_state_message_=[]
@@ -73,6 +51,30 @@ def ros_car_state_message_creater(rospy,client,initial_velocoty_noise,image=Fals
     odo_msg=Odometry()
     eul_msg=Vector3()
     euv_msg=Vector3()
+    
+    if image==True:
+    
+        responses = client.simGetImages([ImageRequest("0", airsim.ImageType.Scene, False, False)])
+        response = responses[0]
+    
+        img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
+        
+        try:
+            
+            img_rgba = img1d.reshape(response.height, response.width, 4)
+#            airsim.write_png(os.path.normpath('greener.png'), img_rgba) 
+#            np.save('/home/spikezz/RL project copy/img_data/%d'%(seq%150), img_rgba)
+            image_msg = Image()
+            image_msg.header.frame_id = str(seq%150)
+            image_msg.height = img_rgba.shape[0];
+            image_msg.width =  img_rgba.shape[1];
+            image_msg.encoding = 'rgba8';
+            image_msg.step = img_rgba.shape[0]*img_rgba.shape[1]*4
+            image_msg.data = img_rgba.tobytes();
+                
+        except:
+            
+            print("Image acquisition failed")
     
     vel_msg.x=car_state.kinematics_estimated.linear_velocity.x_val-initial_velocoty_noise[0]
     vel_msg.y=car_state.kinematics_estimated.linear_velocity.y_val-initial_velocoty_noise[1]

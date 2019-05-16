@@ -22,7 +22,7 @@ import calculate as cal
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import scipy.special as ss
-
+import time
 import airsim
 import rospy
     
@@ -351,7 +351,7 @@ sub_brake=rospy.Subscriber("brake",Float64,set_brake)
 sub_throt=rospy.Subscriber("throttle",Float64,set_throttle)
 sub_steering=rospy.Subscriber("steeringAngle",Float64, set_steering)
 
-rate = rospy.Rate(10) # 10hz
+rate = rospy.Rate(100) # 10hz
 car_state = client.getCarState()
 #calibration white noise of velocity
 init_v_x=car_state.kinematics_estimated.linear_velocity.x_val
@@ -360,7 +360,30 @@ init_v_z=car_state.kinematics_estimated.linear_velocity.z_val
 #calibration white noise of velocity
 
 while not rospy.is_shutdown():
+    time_stamp=time.time()
+    
+    responses = client.simGetImages([ImageRequest("0", airsim.ImageType.Scene, False, False)])
+    response = responses[0]
 
+    img1d = np.fromstring(response.image_data_uint8, dtype=np.uint8)
+    
+    try:
+        
+        img_rgba = img1d.reshape(response.height, response.width, 4)
+        img_rgba = np.flipud(img_rgba)
+#            airsim.write_png(os.path.normpath('greener.png'), img_rgba) 
+        img_rgba = np.flipud(img_rgba)	
+        image_msg = Image()
+        image_msg.height = img_rgba.shape[0];
+        image_msg.width =  img_rgba.shape[1];
+        image_msg.encoding = 'rgba8';
+        image_msg.step = img_rgba.shape[0]*img_rgba.shape[1]*4
+        image_msg.data = img_rgba.tobytes();
+            
+    except:
+        
+        print("Image acquisition failed")
+    
     acc_msg=Vector3()
     vel_msg=Vector3()
     a_a_msg=Quaternion()
@@ -447,15 +470,18 @@ while not rospy.is_shutdown():
     act_msg.data.append(car_controls.steering)
 #    print(rospy.get_rostime())
     client.setCarControls(car_controls)
-#    pub_I.publish(image_msg)
-    pub_acceleration.publish(acc_msg)
-    pub_velocity.publish(vel_msg)
-    pub_angular_acceleration.publish(a_a_msg)
-    pub_angular_velocity.publish(a_v_msg)
-    pub_Odometry_auto.publish(odo_msg)
-    pub_E.publish(eul_msg)
-    pub_blue_cone.publish(bcn_msg)
-    pub_yellow_cone.publish(ycn_msg)
-    pub_action.publish(act_msg)
+    pub_I.publish(image_msg)
+#    pub_acceleration.publish(acc_msg)
+#    pub_velocity.publish(vel_msg)
+#    pub_angular_acceleration.publish(a_a_msg)
+#    pub_angular_velocity.publish(a_v_msg)
+#    pub_Odometry_auto.publish(odo_msg)
+#    pub_E.publish(eul_msg)
+#    pub_blue_cone.publish(bcn_msg)
+#    pub_yellow_cone.publish(ycn_msg)
+#    pub_action.publish(act_msg)
     rate.sleep()
-    
+    elapsed_time=time.time()-time_stamp
+#    time_step +=1
+#    time_step_set.append(elapsed_time)
+    print("elapsed_time:",elapsed_time)

@@ -5,14 +5,7 @@ Created on Tue Mar 26 13:23:00 2019
 
 @author: spikezz
 """
-#from airsim import ImageRequest
-#from geometry_msgs.msg import Vector3
-#from geometry_msgs.msg import Quaternion
-#from geometry_msgs.msg import PoseArray
-#from geometry_msgs.msg import Pose
-#from nav_msgs.msg import Odometry
-#from std_msgs.msg import Float32MultiArray
-#from std_msgs.msg import Float64
+
 #from scipy.special import softmax
 #import PythonTrackWrapper as ptw
 
@@ -32,6 +25,7 @@ import sensor
 import copy
 import controller
 import math
+from std_msgs.msg import Float32MultiArray
 
 time.sleep(3)
 time_step=0
@@ -50,8 +44,8 @@ initial_velocoty_noise=mf.Calibration_Speed_Sensor(car_state)
 
 ros_publisher=ri.define_ros_publisher(rospy)
 
+#rate = rospy.Rate(125) # 10hz
 rate = rospy.Rate(10) # 10hz
-
 ##dimension of input data
 input_dim = 100
 ##dimension of input data
@@ -109,9 +103,6 @@ list_yellow_cone=[]
 list_blue_cone_curve=[]
 list_yellow_cone_curve=[]
 
-print("lengthy:",len(list_yellow_cone_random))
-print("lengthb:",len(list_blue_cone_random))
-
 for i in range(0,len(list_yellow_cone_random)):
     
     blue_cone=client.simGetObjectPoses('blue_'+str(i))
@@ -140,6 +131,7 @@ sen_sim=sensor.Sensor_Simulator()
 real_lidar=False
 image_output=False
 plote_animation=True
+plote_signal=False
 first_person=True
 
 sess = tf.Session()
@@ -150,33 +142,44 @@ agent_i=Agent.Agent_Imitation(sess,action_dim,input_dim,action_bound,lr_i,replac
 agent=agent_i
 memory_imitation = RL.Memory(memory_capacity,memory_capacity_bound, dims=2 * input_dim + 2*action_dim + 1 + 2)
 
+lidar_asynchron_frame=False
 change_pid=0
 state_switch=0
-predict_step=5
-
+predict_step_angle=3
+predict_step=24
+predict_sample_curverature=8
+curverature_flatten_grad=16
+cur_min=1
+cur_max=0
+#camera_msg_list=[None]*200
+#print(camera_msg_list)
 #kp~(0.03,1.0),ki~(0.06,0.3),kd:(0.0102,0.4)
-set_point_speed=20
-pid_speed=controller.PID_Controller(0.048, 0.06, 0.0102, setpoint=set_point_speed,output_limits=(-1, 1))
+set_point_speed=3
 
+pid_speed=controller.PID_Controller(0.072, 0.06, 0.006, setpoint=set_point_speed,output_limits=(-1, 1))
 open_close_control_rate=0.5
-#kp~(0.1,0.9),ki~(0.3,0.3),kd:(0.069,0.4)
+
+#kp~(0.1,3.6),ki~(0.3,0.3),kd:(0.069,0.4)
 set_point_steering=1.5
-pid_steering=controller.PID_Controller(0.3, 0.045,0.6 , setpoint=set_point_steering,output_limits=(-1, 1))
+
+pid_steering=controller.PID_Controller(0.9, 0.000,1.78, setpoint=set_point_steering,output_limits=(-1, 1))
+
 action_controller=[0,0]
-steering_open=0
 
 all_var=True
 imitation_learn=False
 
 saver = tools.Saver(sess,LOAD,agent_i.actor,None,all_var,agent_i=True)
 Summary=tools.Summary()
+Summary_Scope=tools.Summary.Summary_Scope(plote_action=False,plote_speed=False,plote_cross_position=False,plote_predict_angle=False,\
+                                    plote_predict_curverature=False)
 
 agent_i.actor.writer.add_graph(sess.graph,episode_counter)
 
 if plote_animation:
     
-    lidar_ploter=tools.Ploter([-15,15],[-15,15],[6.4, 4.8])
-    curve_ploter=tools.Ploter([-20,90],[-80,30],[12.8, 9.6])
+    lidar_ploter=tools.Ploter([-30,30],[-30,30],[6.4, 4.8])
+    curve_ploter=tools.Ploter([-110,90],[-30,170],[12.8, 9.6])
 
 cone_message=ri.ros_cone_message_creater(rospy,list_blue_cone,list_yellow_cone)
 
@@ -209,7 +212,7 @@ while not rospy.is_shutdown():
     time_stamp = time.time()
     
     car_state = client.getCarState()
-    ros_car_state_message=ri.ros_car_state_message_creater(rospy,client,initial_velocoty_noise,image=image_output)
+    ros_car_state_message=ri.ros_car_state_message_creater(rospy,client,initial_velocoty_noise,time_step,image=image_output)
     
     if real_lidar:
         
@@ -231,15 +234,10 @@ while not rospy.is_shutdown():
         sen_sim.find_sensored_cone(list_yellow_cone,ros_car_state_message[7],ros_car_state_message[8],color='y')
         list_blue_cone_sensored_sita=\
         sen_sim.find_sensored_cone(list_blue_cone,ros_car_state_message[7],ros_car_state_message[8],color='b')
-        
-##        list_cone_sensored_distance=copy.copy(list_yellow_cone_sensored_distance)
-##        list_cone_sensored_distance=list_cone_sensored_distance+list_blue_cone_sensored_distance
-        
+      
         list_cone_sensored_sita=copy.deepcopy(list_yellow_cone_sensored_sita)
         list_cone_sensored_sita=list_cone_sensored_sita+list_blue_cone_sensored_sita
-        
-##        list_cone_sensored_distance=sorted(list_cone_sensored_distance,key=lambda x:x[0])
-        
+       
         list_cone_sensored_sita=sorted(list_cone_sensored_sita,key=lambda x:x[1])
 
         list_sensored_cone_yellow_covered_free,list_sensored_cone_blue_covered_free=sen_sim.cover_cone(list_cone_sensored_sita)
@@ -276,8 +274,8 @@ while not rospy.is_shutdown():
                 
                 print("no blue cone")
        
-        closest_yellow_curve_point_pair,predict_yellow_curve_point_pair=\
-        sen_sim.find_closest_curve_point_pair(yellow_cone_spline_origin,ros_car_state_message[7],predict_step)
+        closest_yellow_curve_point_pair,predict_yellow_curve_point_pair,predict_yellow_curverature_point=\
+        sen_sim.find_closest_curve_point_pair(yellow_cone_spline_origin,ros_car_state_message[7],predict_step,predict_sample_curverature,predict_step_angle)
         
         distance_between_closet_yellow_curve_point,vector_closest_yellow_curve_point=\
         sen_sim.calculate_distance_curve_point_pair(closest_yellow_curve_point_pair)
@@ -285,42 +283,25 @@ while not rospy.is_shutdown():
         distance_between_predict_yellow_curve_point,vector_predict_yellow_curve_point=\
         sen_sim.calculate_distance_curve_point_pair(predict_yellow_curve_point_pair)
         
-        closest_blue_curve_point_pair,predict_blue_curve_point_pair=\
-        sen_sim.find_closest_curve_point_pair(blue_cone_spline_origin,ros_car_state_message[7],predict_step)
+        closest_blue_curve_point_pair,predict_blue_curve_point_pair,predict_blue_curverature_point=\
+        sen_sim.find_closest_curve_point_pair(blue_cone_spline_origin,ros_car_state_message[7],predict_step,predict_sample_curverature,predict_step_angle)
         
         distance_between_closet_blue_curve_point,vector_closest_blue_curve_point=\
         sen_sim.calculate_distance_curve_point_pair(closest_blue_curve_point_pair)
         
         distance_between_predict_blue_curve_point,vector_predict_blue_curve_point=\
-        sen_sim.calculate_distance_curve_point_pair(predict_blue_curve_point_pair)
+        sen_sim.calculate_distance_curve_point_pair(predict_blue_curve_point_pair)    
         
-        if predict_yellow_curve_point_pair[1][2]>predict_yellow_curve_point_pair[0][2]:
+        predict_angle_difference=sen_sim.calculate_predict_angle_difference(predict_yellow_curve_point_pair,ros_car_state_message[8])
+        
+        if distance_between_predict_yellow_curve_point<distance_between_closet_blue_curve_point:
             
-            predict_angle_difference=cal.calculate_sita_of_radius(predict_yellow_curve_point_pair[0][1],\
-                                    predict_yellow_curve_point_pair[1][1])-math.degrees(ros_car_state_message[8].z)
+            curverature_sign=-1
             
-        else:
+        elif distance_between_predict_yellow_curve_point>=distance_between_closet_blue_curve_point:
             
-            predict_angle_difference=cal.calculate_sita_of_radius(predict_yellow_curve_point_pair[1][1],\
-                                    predict_yellow_curve_point_pair[0][1])-math.degrees(ros_car_state_message[8].z)
-
-        if predict_angle_difference > 180:
+            curverature_sign=1
             
-            predict_angle_difference=predict_angle_difference-360
-            
-        elif predict_angle_difference < -180:
-            
-            predict_angle_difference=predict_angle_difference+360
-
-        if predict_angle_difference>90:
-            
-            predict_angle_difference=180-predict_angle_difference
-            
-        elif predict_angle_difference<-90:
-            
-            predict_angle_difference=180+predict_angle_difference
-            
-#        print('predict_angle_difference:',predict_angle_difference)
         
         try:
             
@@ -338,64 +319,108 @@ while not rospy.is_shutdown():
                 
                 sin_projection_yellow=sin_projection_yellow*(-1)
                 
-            print("sin_projection_yellow:%.2f \t sin_projection_blue:%.2f"%(sin_projection_yellow,sin_projection_blue))
+#            print("sin_projection_yellow:%.2f \t sin_projection_blue:%.2f"%(sin_projection_yellow,sin_projection_blue))
 #            print("sin_projection difference:%.2f"%(sin_projection_difference))
         except:
             
             print("shit happens")
             
+        predict_yellow_curverature_point_c=copy.deepcopy(predict_yellow_curverature_point)
+        predict_blue_curverature_point_c=copy.deepcopy(predict_blue_curverature_point)
+
         if first_person:
             
             sen_sim.rotate_sight(list_cone_sensored_sita,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,\
-                                 predict_yellow_curve_point_pair,predict_blue_curve_point_pair,ros_car_state_message[8])
-  
-        if plote_animation:
-            
-            sen_sim.plot_all(list_cone_sensored_sita,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,\
-                             predict_yellow_curve_point_pair,predict_blue_curve_point_pair,\
-                             lidar_ploter,ros_car_state_message[8],first_person)
+                                 predict_yellow_curve_point_pair,predict_blue_curve_point_pair,predict_yellow_curverature_point_c,\
+                                 predict_blue_curverature_point_c,ros_car_state_message[8])  
         
-#        #chose action imitation
-#        action = agent.actor.choose_action(observation,agent_i=True)
-#            
-#        if action[0]>=0.5:
-#            
-#            if imitation_learn:
-#                
-#                car_controls.throttle=float(action[0]-0.5)
-#                car_controls.brake=0
-#                
-#            agent.actor.throttle_imitation.append(car_controls.throttle)  
-#            agent.actor.brake_imitation.append(car_controls.brake)
-#            
-#        elif action[0]<=-0.5:
-#            
-#            if imitation_learn:
-#                
-#                car_controls.brake=float(-action[0]-0.5)
-#                car_controls.throttle=0
-#                
-#            agent.actor.throttle_imitation.append(car_controls.throttle) 
-#            agent.actor.brake_imitation.append(car_controls.brake)
-#            
-#        else:
-#            
-#            agent.actor.throttle_imitation.append(action[0])  
-#            
-#        if imitation_learn:    
-#            
-#            car_controls.steering=float(action[1])
-#            
-#        agent.actor.steering_angle_imitation.append(action[1])
+        x_center_yellow,y_center_yellow,r_yellow,circle_norm_vector_yellow=cal.calculate_circle_curverature_with_3p([predict_yellow_curverature_point_c[0][1][1],\
+                                                                    predict_yellow_curverature_point_c[1][1][1],predict_yellow_curverature_point_c[2][1][1]],\
+                                                                    [predict_yellow_curverature_point_c[0][1][0],predict_yellow_curverature_point_c[1][1][0],\
+                                                                     predict_yellow_curverature_point_c[2][1][0]])
+        
+        x_center_blue,y_center_blue,r_blue,circle_norm_vector_blue=cal.calculate_circle_curverature_with_3p([predict_blue_curverature_point_c[0][1][1],\
+                                                                    predict_blue_curverature_point_c[1][1][1],predict_blue_curverature_point_c[2][1][1]],\
+                                                                    [predict_blue_curverature_point_c[0][1][0],predict_blue_curverature_point_c[1][1][0],\
+                                                                     predict_blue_curverature_point_c[2][1][0]])
+                                                                    
+        agent.actor.predict_curverature_measured.append((1/r_yellow+1/r_blue)/2)
+        
+        if len(agent.actor.predict_curverature_measured)>(predict_sample_curverature+curverature_flatten_grad):
+            
+            sum_flattened_predict_curverature=0
+            sum_flattened_predict_curverature_gradient=0
+            
+            for i in range(0,predict_sample_curverature+curverature_flatten_grad):
+       
+                sum_flattened_predict_curverature=agent.actor.predict_curverature_measured[-(i+1)]+sum_flattened_predict_curverature
+                
+                if i<(predict_sample_curverature+curverature_flatten_grad-1):
+                    
+                    sum_flattened_predict_curverature_gradient=np.abs(agent.actor.predict_curverature_measured[-(i+1)]-\
+                    agent.actor.predict_curverature_measured[-(i+2)])+sum_flattened_predict_curverature_gradient
+         
+            flattened_predict_curverature=sum_flattened_predict_curverature/(predict_sample_curverature+curverature_flatten_grad*(1+sum_flattened_predict_curverature_gradient)**1)
+            
+            if flattened_predict_curverature<cur_min:
+                
+                cur_min=flattened_predict_curverature
+                
+            if flattened_predict_curverature>cur_max:
+                
+                cur_max=flattened_predict_curverature
+            
+            agent.actor.predict_curverature.append(flattened_predict_curverature)
+            
+#        print('cur_min:%.10f cur_max:%.10f'%(cur_min,cur_max))
+            
+        if plote_animation:
+
+            x_rs,y_rs = cal.draw_circle(x_center_yellow,y_center_yellow,r_yellow,lidar_ploter)
+            sen_sim.plot_all(list_cone_sensored_sita,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,\
+                             predict_yellow_curve_point_pair,predict_blue_curve_point_pair,predict_yellow_curverature_point_c,\
+                             predict_blue_curverature_point_c,x_rs,y_rs,lidar_ploter,ros_car_state_message[8],first_person)
+#        
+##        #chose action imitation
+##        action = agent.actor.choose_action(observation,agent_i=True)
+##            
+##        if action[0]>=0.5:
+##            
+##            if imitation_learn:
+##                
+##                car_controls.throttle=float(action[0]-0.5)
+##                car_controls.brake=0
+##                
+##            agent.actor.throttle_imitation.append(car_controls.throttle)  
+##            agent.actor.brake_imitation.append(car_controls.brake)
+##            
+##        elif action[0]<=-0.5:
+##            
+##            if imitation_learn:
+##                
+##                car_controls.brake=float(-action[0]-0.5)
+##                car_controls.throttle=0
+##                
+##            agent.actor.throttle_imitation.append(car_controls.throttle) 
+##            agent.actor.brake_imitation.append(car_controls.brake)
+##            
+##        else:
+##            
+##            agent.actor.throttle_imitation.append(action[0])  
+##            
+##        if imitation_learn:    
+##            
+##            car_controls.steering=float(action[1])
+##            
+##        agent.actor.steering_angle_imitation.append(action[1])
           
         #controller behavior
 #        speed=np.sqrt(np.power(ros_car_state_message[0].x, 2)+np.power(ros_car_state_message[1].x, 2)+\
 #                np.power(ros_car_state_message[2].x, 2))
-#        
+        
 #        print("speed:",speed)
 #        print("speed error:",car_state.speed-speed)
-#        agent.actor.speed.append(car_state.speed)
-#        agent.actor.speed.append(speed)
+
 #
 #        if car_state.speed>set_point_speed:
 #            
@@ -403,7 +428,6 @@ while not rospy.is_shutdown():
 #        print(car_state.speed)
 
         elapsed_time_setpoint=time.time()-time_stamp_setpoint
-        
 #        print(elapsed_time_setpoint)
         
 #        if elapsed_time_setpoint>=12 and change_pid==0:
@@ -425,25 +449,44 @@ while not rospy.is_shutdown():
 #            set_point_speed=5
 #            pid_speed.setpoint=set_point_speed      
 #            change_pid=4
+#
+#        if elapsed_time_setpoint>=10: 
+#            car_controls.steering=(elapsed_time_setpoint-10)*0.01
+#            car_controls.steering=np.sin((elapsed_time_setpoint-10)/2)*0.1
 #        
 #        if elapsed_time_setpoint>=10 and elapsed_time_setpoint<22:
-##        if elapsed_time_setpoint>=10: 
-##            car_controls.steering=(elapsed_time_setpoint-10)*0.01
-##            car_controls.steering=np.sin((elapsed_time_setpoint-10)/2)*1
-#            set_point_speed=set_point_speed-(elapsed_time_setpoint-10)*0.03
+#            set_point_speed=set_point_speed-(elapsed_time_setpoint-10)*0.05
 #            pid_speed.setpoint=set_point_speed
 #            
 #        if elapsed_time_setpoint>=22:
 #            
 #            if set_point_speed<20:
 #                
-#                set_point_speed=set_point_speed+(elapsed_time_setpoint-22)*0.03
+#                set_point_speed=set_point_speed+(elapsed_time_setpoint-22)*0.05
 #                pid_speed.setpoint=set_point_speed
-        
-#        if change_pid==0:
+    
+            
+            
+
+        try:
+            
+#            set_point_speed=(-1000)*(flattened_predict_curverature-np.abs(flattened_predict_curverature-agent.actor.predict_curverature[-2]))+20
+            set_point_speed=math.exp(5.9-flattened_predict_curverature)-349
+#            print(set_point_speed)
+
+            if set_point_speed<4:
+                
+                set_point_speed=4
 #            
-#            set_point_steering=sin_projection_yellow
-#            change_pid=1
+#            open_close_control_rate=(-24)*flattened_predict_curverature+0.9
+            
+            if open_close_control_rate<0:
+                
+                open_close_control_rate=0
+                
+        except:
+            
+            print('not ready!')
             
         agent.actor.speed.append(car_state.speed)
         agent.actor.set_point_speed.append(set_point_speed)
@@ -451,13 +494,18 @@ while not rospy.is_shutdown():
         agent.actor.set_point_lateral_position.append(set_point_steering)
         agent.actor.predict_angle_diffrence.append(-math.radians(predict_angle_difference))
         agent.actor.set_point_predict_angle_diffrence.append(0)
+        agent.actor.open_close_control_rate.append(open_close_control_rate)
         
+#        print('sin_projection_yellow:',sin_projection_yellow-1.5)
+        pid_speed.setpoint=set_point_speed
         action_controller[0]=pid_speed(car_state.speed)
 #        action_controller[0]=1
         
-        action_controller[1]=pid_steering(sin_projection_yellow)/(set_point_speed**1)
+        action_controller[1]=pid_steering(sin_projection_yellow)/((set_point_speed)**1)
+        
         car_controls.steering=predict_angle_difference/40*open_close_control_rate+action_controller[1]*(1-open_close_control_rate)
-#        car_controls.steering=action_controller[1]
+#        car_controls.steering=action_controller[1]*0.1
+        
         agent.actor.steering_angle_controller.append(car_controls.steering)
         
         if action_controller[0]>=0:
@@ -474,19 +522,27 @@ while not rospy.is_shutdown():
             agent.actor.throttle_controller.append(car_controls.throttle)
             agent.actor.brake_controller.append(car_controls.brake)
             
+        act_msg=Float32MultiArray()
+        now=rospy.get_rostime()
+        act_msg.data.append(now.secs)
+        act_msg.data.append(now.nsecs)
+        act_msg.data.append(car_controls.throttle)
+        act_msg.data.append(car_controls.brake)
+        act_msg.data.append(car_controls.steering)
+        
         client.setCarControls(car_controls)   
         
         agent.actor.odm_msg.append(ros_car_state_message[7])
         agent.actor.eul_msg.append(ros_car_state_message[8])
 
-#        Summary.plot_summary(agent_i)
+        Summary_Scope.plot_summary(agent_i)
         
-        elapsed_time_setpoint=time.time()-time_stamp_setpoint
-        time_set.append(elapsed_time_setpoint)
+#        elapsed_time_setpoint=time.time()-time_stamp_setpoint
+#        time_set.append(elapsed_time_setpoint)
 #        print("elapsed_time:",elapsed_time_setpoint)
-#        
-#        if elapsed_time_setpoint>=24:
-#
+        
+#        if elapsed_time_setpoint>=42:
+#            
 #            summary=True
             
     elif summary==True and state_switch==0:
@@ -505,19 +561,35 @@ while not rospy.is_shutdown():
     if real_lidar:
         
         ros_publisher['pub_lidar_data'].publish(pointcloud_msg)
+        
+#        if lidar_frame:
+#            
+#            ros_publisher['pub_lidar_data'].publish(pointcloud_msg)
+#            lidar_frame=not lidar_frame
+#            
+#        else:
+#            
+#            lidar_frame=not lidar_frame
+#            
         ros_publisher['pub_Odometry_auto'].publish(ros_car_state_message[7])
         
     if image_output:
+        
         try:
+            
             ros_publisher['pub_Image'].publish(ros_car_state_message[9])
-#            ros_publisher['pub_Odometry_auto'].publish(ros_car_state_message[7])
+#            camera_msg_list[time_step%100]=ros_car_state_message[9]
+            
         except:
+            
             print('leer')
+            
+    ros_publisher['pub_action'].publish(act_msg)
     rate.sleep()
     elapsed_time=time.time()-time_stamp
     time_step +=1
 #    time_step_set.append(elapsed_time)
-#    print("elapsed_time:",elapsed_time)
+    print("elapsed_time:",elapsed_time)
 #    if elapsed_time>0.05:
 #        print("sth broke:%d"%(time_step))
 #        break

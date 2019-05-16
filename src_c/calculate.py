@@ -127,6 +127,52 @@ def calculate_rotated_point(theta,R,sita):
     
     return point
 
+def calculate_circle_curverature_with_3p(x_list,y_list):
+
+ 
+    a_f=(x_list[0]**2-x_list[1]**2)
+    b_f=(x_list[1]-x_list[0])
+    c_f=(y_list[0]**2-y_list[1]**2)
+    d_f=(y_list[1]-y_list[0])
+    
+    e_f=(x_list[1]**2-x_list[2]**2)
+    f_f=(x_list[2]-x_list[1])
+    g_f=(y_list[1]**2-y_list[2]**2)
+    h_f=(y_list[2]-y_list[1])
+    
+    A=2*b_f
+    B=2*d_f
+    C=a_f+c_f
+    
+    D=2*f_f
+    E=2*h_f
+    F=e_f+g_f
+    
+    y_center=(D*C-A*F)/((A*E-B*D)+1e-16)
+    x_center=(B*F-C*E)/((A*E-B*D)+1e-16)
+#    ax.plot(x_center,y_center,'bo',markersize=2)
+    r=pow(((x_center-x_list[1])**2+(y_center-y_list[1])**2),0.5)
+    
+    norm_vector=[x_list[1]-x_center,y_list[1]-y_center]
+    
+#    return 1/r
+    return x_center,y_center,r,norm_vector
+
+def draw_circle(x_center,y_center,r,ploter):
+    
+    x_rs=[]
+    y_rs=[]
+    theta=0
+    
+    for theta in range(120):
+        x_r=math.cos(math.radians(theta*3))*r+x_center
+        y_r=math.sin(math.radians(theta*3))*r+y_center
+        x_rs.append(x_r)
+        y_rs.append(y_r)
+    
+    return x_rs,y_rs
+#    ax.plot(x_rs,y_rs,'b',linewidth=1)
+    
 def quaternion_matrix(quaternion):
     """Return homogeneous rotation matrix from quaternion.
 

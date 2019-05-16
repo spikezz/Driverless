@@ -19,17 +19,6 @@ import sensor_msgs.point_cloud2 as pcl2
 from scipy import interpolate
 from sensor_msgs.msg import PointCloud2,PointField
 
-#
-#_DATATYPES = {}
-#_DATATYPES[PointField.INT8]    = ('b', 1)
-#_DATATYPES[PointField.UINT8]   = ('B', 1)
-#_DATATYPES[PointField.INT16]   = ('h', 2)
-#_DATATYPES[PointField.UINT16]  = ('H', 2)
-#_DATATYPES[PointField.INT32]   = ('i', 4)
-#_DATATYPES[PointField.UINT32]  = ('I', 4)
-#_DATATYPES[PointField.FLOAT32] = ('f', 4)
-#_DATATYPES[PointField.FLOAT64] = ('d', 8)
-
 class Lidar_Real:
     
     def __init__(self,client):
@@ -38,63 +27,6 @@ class Lidar_Real:
         self.points_set=[]
         self.client = client
         self.field=PointField()
-    
-        
-#    def get_struct_fmt(self,is_bigendian, fields, field_names=None):
-#        
-#        fmt = '>' if is_bigendian else '<'
-#    
-#        offset = 0
-#        
-#        for field in (f for f in sorted(fields, key=lambda f: f.offset) if field_names is None or f.name in field_names):
-#            
-#            if offset < field.offset:
-#                
-#                fmt += 'x' * (field.offset - offset)
-#                offset = field.offset
-#                
-#            if field.datatype not in _DATATYPES:
-#
-#                print(sys.stderr,'Skipping unknown PointField datatype [%d]' % (field.datatype))
-#                
-#            else:
-#                
-#                datatype_fmt, datatype_length = _DATATYPES[field.datatype]
-#                fmt    += field.count * datatype_fmt
-#                offset += field.count * datatype_length
-#        
-#        return fmt
-    
-#    def create_cloud(self, header, fields, points, is_b, is_d):
-#        
-#        self.point_validation=[]
-#        cloud_struct = struct.Struct(self.get_struct_fmt(False, fields))
-#        
-#        buff = ctypes.create_string_buffer(cloud_struct.size * len(points))
-#    
-#        point_step, pack_into, unpack_from= cloud_struct.size, cloud_struct.pack_into,cloud_struct.unpack_from
-#        offset = 0
-#        
-#        for p in points:
-#            
-#            pack_into(buff, offset, *p)
-#            offset += point_step
-#            
-##        point_idx=int(offset/point_step)
-##        print("offset end:",(offset/point_step))
-#        
-##        offset = 0
-##        
-##        for i in range(0,point_idx):
-##            
-##            self.point_validation.append(list(unpack_from(buff, i*point_step)))
-#        
-##        print("points:",points)
-##        print("point_validation:",self.point_validation)
-#            
-#        return PointCloud2(header=header,height=1,width=len(points),is_dense=is_d,\
-#                           is_bigendian=is_b,fields=fields,point_step=cloud_struct.size,\
-#                           row_step=cloud_struct.size * len(points),data=buff.raw)
 
     
     def get_lidar_data(self,odm_msg):
@@ -108,41 +40,38 @@ class Lidar_Real:
                 print("\tNo points received from Lidar data")
                 
             else:
-            
-            
+    
                 self.points_set = np.array(lidar_data.point_cloud, dtype=np.dtype('f4'))
                 self.points_set= np.reshape(self.points_set, (int(self.points_set.shape[0]/3), 3))
+#                print('before:',self.points_set)
+                odm = np.array([-odm_msg.pose.pose.position.x,-odm_msg.pose.pose.position.y,-odm_msg.pose.pose.position.z])
+                odm_matrix=np.tile(odm, (len(self.points_set),1))
+                z_correcter= np.array([-1,1,-1])
+                z_correcter_matrix=np.tile(z_correcter, (len(self.points_set),1))
+#                lidar_local_correcter= np.array([0,0,-0.45])
+#                lidar_local_correcter_matrix=np.tile(lidar_local_correcter, (len(self.points_set),1))
+#                self.points_set=(self.points_set+lidar_local_correcter_matrix)*z_correcter_matrix
+                self.points_set=(self.points_set+odm_matrix)*z_correcter_matrix
+#                self.points_set=self.points_set*z_correcter_matrix
+#                print('after:',self.points_set)
+       
                 
-                for p in self.points_set:
-                    p[0]=(p[0]-odm_msg.pose.pose.position.x)*(-1)
-                    p[1]=p[1]-odm_msg.pose.pose.position.y
-                    p[2]=(p[2]-odm_msg.pose.pose.position.z)*(-1)
 
-#                print("\tReading %d: time_stamp: %d number_of_points: %d" % (i, lidar_data.time_stamp, len(self.points_set)))
-#                print("\t\tlidar position: %s" % (pprint.pformat(lidar_data.pose.position)))
-#                print("\t\tlidar orientation: %s" % (pprint.pformat(lidar_data.pose.orientation)))
+#    
+    #            print("\tReading %d: time_stamp: %d number_of_points: %d" % (i, lidar_data.time_stamp, len(self.points_set)))
+    #                print("\t\tlidar position: %s" % (pprint.pformat(lidar_data.pose.position)))
+    #                print("\t\tlidar orientation: %s" % (pprint.pformat(lidar_data.pose.orientation)))
                 
                 self.field.name="cooridnates"
                 self.field.offset=0
                 self.field.datatype=7
                 self.field.count=3
-   
+       
                 self.frame_point_cloud.header.seq=0
                 self.frame_point_cloud.header.stamp=rospy.get_rostime()
                 self.frame_point_cloud.header.frame_id="vld"
                 
                 self.frame_point_cloud = pcl2.create_cloud_xyz32(self.frame_point_cloud.header, self.points_set)
-#                self.frame_point_cloud=self.create_cloud(self.frame_point_cloud.header, [self.field], self.points_set,False,False)
-#                self._get_struct_fmt(False,[self.field],self.field.name)
-#                
-#                self.frame_point_cloud.fields=self.field
-#                self.frame_point_cloud.height=1
-#                self.frame_point_cloud.width=len(self.points_set)
-                
-#                self.frame_point_cloud.row_step=len(self.points_set)*3*sizeof(float)
-#                self.frame_point_cloud.point_step=3*sizeof(float)
-                
-#                print("frame_point_cloud:",self.frame_point_cloud)
                 
         return self.frame_point_cloud
     
@@ -293,15 +222,14 @@ class Sensor_Simulator(object):
         point[1]=cal.calculate_rotated_point(0,point[0],sita_of_curve_point_and_car)
     
     def rotate_sight(self,list_cone_sensored_sita,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,\
-                     predict_yellow_curve_point_pair,predict_blue_curve_point_pair,eul_msg):
+                     predict_yellow_curve_point_pair,predict_blue_curve_point_pair,predict_yellow_curverature_point,\
+                     predict_blue_curverature_point,eul_msg):
         
         for i in range(0,len(list_cone_sensored_sita)):
             
                 list_cone_sensored_sita[i][2]=cal.calculate_rotated_point(0,\
                                        list_cone_sensored_sita[i][0],list_cone_sensored_sita[i][1])
-                
-#        self.roatat_point(closest_yellow_curve_point_pair[0],eul_msg)
-#        self.roatat_point(closest_yellow_curve_point_pair[1],eul_msg)
+   
         for i in range(0,len(closest_yellow_curve_point_pair)):
             
             self.roatat_point(closest_yellow_curve_point_pair[i],eul_msg)
@@ -318,13 +246,19 @@ class Sensor_Simulator(object):
             
             self.roatat_point(predict_blue_curve_point_pair[i],eul_msg)  
             
-#        return list_cone_sensored_sita,closest_yellow_curve_point_pair,closest_blue_curve_point_pair
+        for i in range(0,len(predict_yellow_curverature_point)):
+
+            self.roatat_point(predict_yellow_curverature_point[i],eul_msg) 
+
+        for i in range(0,len(predict_blue_curverature_point)):
+            
+            self.roatat_point(predict_blue_curverature_point[i],eul_msg) 
     
     def update_position_cone_spline(self,odo_msg,ploter):
         
         self.draw_point([odo_msg.pose.pose.position.x],[-odo_msg.pose.pose.position.y],ploter,'g','o',5)
         
-    def find_closest_curve_point_pair(self,cone_spline,odo_msg,predict_step):
+    def find_closest_curve_point_pair(self,cone_spline,odo_msg,predict_step,predict_sample_curverature,predict_step_angle):
         
         list_curve_point=[]
         list_sorted_curve_point=[]
@@ -346,45 +280,72 @@ class Sensor_Simulator(object):
             p_idx_0=list_sorted_curve_point[1][2]+predict_step
             p_idx_1=list_sorted_curve_point[2][2]+predict_step
         
-            if p_idx_0>=len(cone_spline[0]):
-                
-                p_idx_0=p_idx_0-len(cone_spline[0])+1
-                
-            if p_idx_1>=len(cone_spline[0]):    
-    
-                p_idx_1=p_idx_1-len(cone_spline[0])+1
-          
-            return [list_sorted_curve_point[1],list_sorted_curve_point[2]],[list_curve_point_predict[p_idx_0],list_curve_point_predict[p_idx_1]]
-        
+            pa_idx_0=list_sorted_curve_point[1][2]+predict_step_angle
+            pa_idx_1=list_sorted_curve_point[2][2]+predict_step_angle
+            
         elif list_sorted_curve_point[1][2]==(len(cone_spline[0])-1) :
             
             p_idx_0=list_sorted_curve_point[0][2]+predict_step
             p_idx_1=list_sorted_curve_point[2][2]+predict_step
-        
-            if p_idx_0>=len(cone_spline[0]):
-                
-                p_idx_0=p_idx_0-len(cone_spline[0])+1
-                
-            if p_idx_1>=len(cone_spline[0]):    
-    
-                p_idx_1=p_idx_1-len(cone_spline[0])+1
-   
-            return [list_sorted_curve_point[0],list_sorted_curve_point[2]],[list_curve_point_predict[p_idx_0],list_curve_point_predict[p_idx_1]]
-        
+            
+            pa_idx_0=list_sorted_curve_point[0][2]+predict_step_angle
+            pa_idx_1=list_sorted_curve_point[2][2]+predict_step_angle
+            
         else:
             
             p_idx_0=list_sorted_curve_point[0][2]+predict_step
             p_idx_1=list_sorted_curve_point[1][2]+predict_step
-        
-            if p_idx_0>=len(cone_spline[0]):
-                
-                p_idx_0=p_idx_0-len(cone_spline[0])+1
-                
-            if p_idx_1>=len(cone_spline[0]):    
-    
-                p_idx_1=p_idx_1-len(cone_spline[0])+1
+           
+            pa_idx_0=list_sorted_curve_point[0][2]+predict_step_angle
+            pa_idx_1=list_sorted_curve_point[1][2]+predict_step_angle
+            
+        if p_idx_0>=len(cone_spline[0]):
+            
+            p_idx_0=p_idx_0-len(cone_spline[0])+1
+            
+        if p_idx_1>=len(cone_spline[0]):    
 
-            return [list_sorted_curve_point[0],list_sorted_curve_point[2]],[list_curve_point_predict[p_idx_0],list_curve_point_predict[p_idx_1]]
+            p_idx_1=p_idx_1-len(cone_spline[0])+1
+        
+        if pa_idx_0>=len(cone_spline[0]):
+            
+            pa_idx_0=pa_idx_0-len(cone_spline[0])+1
+            
+        if pa_idx_1>=len(cone_spline[0]):    
+
+            pa_idx_1=pa_idx_1-len(cone_spline[0])+1
+                
+        if list_sorted_curve_point[0][2]==(len(cone_spline[0])-1) :
+        
+            list_curverature_predict_sorted=sorted([list_curve_point_predict[max(p_idx_0,p_idx_1)-predict_sample_curverature*2],list_curve_point_predict[max(p_idx_0,p_idx_1)-predict_sample_curverature],\
+                                                                             list_curve_point_predict[max(p_idx_0,p_idx_1)]],key=lambda x:x[2])
+    
+
+            return [list_sorted_curve_point[1],list_sorted_curve_point[2]],[list_curve_point_predict[pa_idx_0],list_curve_point_predict[pa_idx_1]],\
+            list_curverature_predict_sorted
+        
+        elif list_sorted_curve_point[1][2]==(len(cone_spline[0])-1) :
+            
+            list_curverature_predict_sorted=sorted([list_curve_point_predict[max(p_idx_0,p_idx_1)-predict_sample_curverature*2],list_curve_point_predict[max(p_idx_0,p_idx_1)-predict_sample_curverature],\
+                                                                             list_curve_point_predict[max(p_idx_0,p_idx_1)]],key=lambda x:x[2])
+
+            return [list_sorted_curve_point[0],list_sorted_curve_point[2]],[list_curve_point_predict[pa_idx_0],list_curve_point_predict[pa_idx_1]],\
+            list_curverature_predict_sorted
+        
+        else:
+  
+            if (p_idx_0==1 and p_idx_1==len(cone_spline[0])-1) or (p_idx_1==1 and p_idx_0==len(cone_spline[0])-1) :
+
+                list_curverature_predict_sorted=[list_curve_point_predict[len(cone_spline[0])-2],list_curve_point_predict[p_idx_1],\
+                                                                                     list_curve_point_predict[p_idx_0]]
+
+            else:
+                
+                list_curverature_predict_sorted=sorted([list_curve_point_predict[max(p_idx_0,p_idx_1)-predict_sample_curverature*2],list_curve_point_predict[max(p_idx_0,p_idx_1)-predict_sample_curverature],\
+                                                                             list_curve_point_predict[max(p_idx_0,p_idx_1)]],key=lambda x:x[2])
+      
+            return [list_sorted_curve_point[0],list_sorted_curve_point[1]],[list_curve_point_predict[pa_idx_0],list_curve_point_predict[pa_idx_1]],\
+            list_curverature_predict_sorted
         
     def find_sensored_cone(self,list_cone,odo_msg,eul_msg,color):
 
@@ -412,13 +373,15 @@ class Sensor_Simulator(object):
 
                     list_sensored_cone.append([cone_distance,sita_of_cone_and_car,cone_vector,color,self.cone_marker])
                    
-#        list_sensored_cone_sort_with_sita=sorted(list_sensored_cone,key=lambda x:x[1])
         return list_sensored_cone
-#        return list_sensored_cone_sort_with_sita
+
 
         
     def plot_all(self,list_sensored_cone_sort_with_sita_covered,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,\
-                 predict_yellow_curve_point_pair,predict_blue_curve_point_pair,ploter,eul_msg,first_person):
+                 predict_yellow_curve_point_pair,predict_blue_curve_point_pair,predict_yellow_curverature_point,\
+                 predict_blue_curverature_point,x_rs,y_rs,ploter,eul_msg,first_person):
+        
+      
         
         for i in range (len(list_sensored_cone_sort_with_sita_covered)):
             
@@ -426,12 +389,29 @@ class Sensor_Simulator(object):
                             [0,list_sensored_cone_sort_with_sita_covered[i][2][0]],\
                             ploter,list_sensored_cone_sort_with_sita_covered[i][3],list_sensored_cone_sort_with_sita_covered[i][4],5)
         
-        self.draw_line([closest_yellow_curve_point_pair[0][1][1],closest_yellow_curve_point_pair[1][1][1]],[closest_yellow_curve_point_pair[0][1][0],closest_yellow_curve_point_pair[1][1][0]],ploter,'b','o',5,3)
-        self.draw_line([closest_blue_curve_point_pair[0][1][1],closest_blue_curve_point_pair[1][1][1]],[closest_blue_curve_point_pair[0][1][0],closest_blue_curve_point_pair[1][1][0]],ploter,'y','o',5,3)
+        self.draw_line([closest_yellow_curve_point_pair[0][1][1],closest_yellow_curve_point_pair[1][1][1]],[closest_yellow_curve_point_pair[0][1][0],\
+                        closest_yellow_curve_point_pair[1][1][0]],ploter,'b','o',5,3)
+        self.draw_line([closest_blue_curve_point_pair[0][1][1],closest_blue_curve_point_pair[1][1][1]],[closest_blue_curve_point_pair[0][1][0],\
+                        closest_blue_curve_point_pair[1][1][0]],ploter,'y','o',5,3)
         
-        self.draw_line([predict_yellow_curve_point_pair[0][1][1],predict_yellow_curve_point_pair[1][1][1]],[predict_yellow_curve_point_pair[0][1][0],predict_yellow_curve_point_pair[1][1][0]],ploter,'b','o',5,3)
-        self.draw_line([predict_blue_curve_point_pair[0][1][1],predict_blue_curve_point_pair[1][1][1]],[predict_blue_curve_point_pair[0][1][0],predict_blue_curve_point_pair[1][1][0]],ploter,'y','o',5,3)
+        self.draw_line([predict_yellow_curve_point_pair[0][1][1],predict_yellow_curve_point_pair[1][1][1]],[predict_yellow_curve_point_pair[0][1][0],\
+                        predict_yellow_curve_point_pair[1][1][0]],ploter,'b','o',5,3)
+        self.draw_line([predict_blue_curve_point_pair[0][1][1],predict_blue_curve_point_pair[1][1][1]],[predict_blue_curve_point_pair[0][1][0],\
+                        predict_blue_curve_point_pair[1][1][0]],ploter,'y','o',5,3)
+
+        self.draw_line(x_rs,y_rs,ploter,'r','o',0,1)
+                
+        for p in range(0,len(predict_yellow_curverature_point)):
+            
+            self.draw_line([predict_yellow_curverature_point[p][1][1],predict_yellow_curverature_point[p][1][1]],\
+                            [predict_yellow_curverature_point[p][1][0],predict_yellow_curverature_point[p][1][0]],ploter,'y','.',5,2)
+            
+        for p in range(0,len(predict_blue_curverature_point)):
+            
+            self.draw_line([predict_blue_curverature_point[p][1][1],predict_blue_curverature_point[p][1][1]],\
+                            [predict_blue_curverature_point[p][1][0],predict_blue_curverature_point[p][1][0]],ploter,'b','.',5,2)
         
+
         if not first_person:
             
             car_x=math.cos(eul_msg.z)*self.car_length
@@ -459,9 +439,7 @@ class Sensor_Simulator(object):
             
             #lidar_left_line
             self.draw_line([0,-self.lidar_bound],[0,0],ploter,'g','x',5,1)
-        car_x=math.cos(eul_msg.z)*self.car_length
-        car_y=math.sin(eul_msg.z)*self.car_length
-#        print(car_x,car_y)
+
         ploter.fig = plt.gcf() 
         ploter.fig.canvas.draw() 
         ploter.fig.canvas.flush_events()   # update the plot and take care of window events (like resizing etc.)
@@ -491,3 +469,34 @@ class Sensor_Simulator(object):
         sin_projection=cal.calculate_projection(0,closest_cone_pair[0][0],closest_cone_pair[1][0],distance_between_cone)[1]
         
         return sin_projection
+    
+    def calculate_predict_angle_difference(self,predict_curve_point_pair,eul_msg):
+        
+        if predict_curve_point_pair[1][2]>predict_curve_point_pair[0][2]:
+            
+            predict_angle_difference=cal.calculate_sita_of_radius(predict_curve_point_pair[0][1],\
+                                    predict_curve_point_pair[1][1])-math.degrees(eul_msg.z)
+            
+        else:
+            
+            predict_angle_difference=cal.calculate_sita_of_radius(predict_curve_point_pair[1][1],\
+                                    predict_curve_point_pair[0][1])-math.degrees(eul_msg.z)
+
+        if predict_angle_difference > 180:
+            
+            predict_angle_difference=predict_angle_difference-360
+            
+        elif predict_angle_difference < -180:
+            
+            predict_angle_difference=predict_angle_difference+360
+
+        if predict_angle_difference>90:
+            
+            predict_angle_difference=180-predict_angle_difference
+            
+        elif predict_angle_difference<-90:
+            
+            predict_angle_difference=180+predict_angle_difference
+        
+        
+        return predict_angle_difference
