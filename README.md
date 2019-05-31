@@ -17,7 +17,7 @@ further progress of Driverless Project
     Software feature:
     1.data ploter
     
-    ![](data_visualizer.gif)
+    ![images](data_visualizer.gif)
     
 
 
