@@ -3,7 +3,7 @@ Projekt Driverless Formula Student
 **bei Team Karat**
 further progress of Driverless Project
 
-    Inthalt:
+    Inhalt:
     
     1. Imitation learning Algorithmus
     
@@ -19,6 +19,14 @@ further progress of Driverless Project
     
 ![image](https://github.com/spikezz/Driverless/blob/master/images/data_visualizer.gif)
 
-    
+2.camera angle
 
+![image](https://github.com/spikezz/Driverless/blob/master/images/different_camera.gif)
 
+3.global map
+
+![image](https://github.com/spikezz/Driverless/blob/master/images/global_map.gif)
+
+4.lidar vision
+
+![image](https://github.com/spikezz/Driverless/blob/master/images/lidar_vision.gif)
