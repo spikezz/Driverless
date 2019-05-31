@@ -1,7 +1,7 @@
 Projekt Driverless Formula Student
 ====  
 **bei Team Karat**
-
+![image](https://github.com/spikezz/Driverless/blob/master/images/data_visualizer.gif)
 further progress of Driverless Project
 
     Inthalt:
@@ -17,7 +17,7 @@ further progress of Driverless Project
     Software feature:
     1.data ploter
     
-    ![<img src="/spikezz/Driverless/blob/master/images/data_visualizer.gif" alt="data_visualizer.gif">](data_visualizer.gif)
+    ![](https://github.com/spikezz/Driverless/blob/master/images/data_visualizer.gif)
 
     
 
