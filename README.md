@@ -16,6 +16,9 @@ further progress of Driverless Project
     
     Software feature:
     1.data ploter
+    
+    ![image](https://github.com/spikezz/Driverless/blob/master/images/data_visualizer.gif?raw=true)
+    
     ![image](https://github.com/spikezz/Driverless/blob/master/image/data_visualizer.gif)
     
 
