@@ -17,7 +17,7 @@ further progress of Driverless Project
     Software feature:
     1.data ploter
     
-    ![<img src="/spikezz/Driverless/blob/master/images/data_visualizer.gif?raw=true" alt="data_visualizer.gif">](data_visualizer.gif)
+    ![<img src="/spikezz/Driverless/blob/master/images/data_visualizer.gif" alt="data_visualizer.gif">](data_visualizer.gif)
 
     
 
