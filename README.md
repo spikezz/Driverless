@@ -1,7 +1,6 @@
 Projekt Driverless Formula Student
 ====  
 **bei Team Karat**
-![image](https://github.com/spikezz/Driverless/blob/master/images/data_visualizer.gif)
 further progress of Driverless Project
 
     Inthalt:
@@ -14,10 +13,11 @@ further progress of Driverless Project
   
     4.classic controller:predict controller+PD+PID
     
-    Software feature:
-    1.data ploter
+**Software feature**
+
+1.data ploter
     
-    ![](https://github.com/spikezz/Driverless/blob/master/images/data_visualizer.gif)
+![image](https://github.com/spikezz/Driverless/blob/master/images/data_visualizer.gif)
 
     
 
