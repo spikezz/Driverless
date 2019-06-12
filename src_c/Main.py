@@ -45,7 +45,7 @@ initial_velocoty_noise=mf.Calibration_Speed_Sensor(car_state)
 ros_publisher=ri.define_ros_publisher(rospy)
 
 #rate = rospy.Rate(125) # 10hz
-rate = rospy.Rate(10) # 10hz
+rate = rospy.Rate(20) # 10hz
 ##dimension of input data
 input_dim = 100
 ##dimension of input data
@@ -90,13 +90,13 @@ observation=np.zeros(input_dim)
 #copy the state
 observation_old=np.zeros(input_dim)
 
-list_yellow_cone_random=client.simGetObjectPoses("yCone")  
-list_blue_cone_random=client.simGetObjectPoses("bCone") 
+list_yellow_cone_random=client.simGetObjectPosesWithTag("yCone")  
+list_blue_cone_random=client.simGetObjectPosesWithTag("bCone") 
 
 while list_yellow_cone_random==[] or list_blue_cone_random==[]:
     
-    list_yellow_cone_random=client.simGetObjectPoses("yCone")  
-    list_blue_cone_random=client.simGetObjectPoses("bCone") 
+    list_yellow_cone_random=client.simGetObjectPosesWithTag("yCone")  
+    list_blue_cone_random=client.simGetObjectPosesWithTag("bCone") 
 
 list_blue_cone=[]
 list_yellow_cone=[]
@@ -105,13 +105,13 @@ list_yellow_cone_curve=[]
 
 for i in range(0,len(list_yellow_cone_random)):
     
-    blue_cone=client.simGetObjectPoses('blue_'+str(i))
-    yellow_cone=client.simGetObjectPoses('yellow_'+str(i))
+    blue_cone=client.simGetObjectPosesWithTag('blue_'+str(i))
+    yellow_cone=client.simGetObjectPosesWithTag('yellow_'+str(i))
     
     while blue_cone==[] or yellow_cone==[]:
         
-        blue_cone=client.simGetObjectPoses('blue_'+str(i))
-        yellow_cone=client.simGetObjectPoses('yellow_'+str(i))
+        blue_cone=client.simGetObjectPosesWithTag('blue_'+str(i))
+        yellow_cone=client.simGetObjectPosesWithTag('yellow_'+str(i))
 
     list_blue_cone.append(blue_cone[0])
     list_yellow_cone.append(yellow_cone[0])
@@ -124,13 +124,13 @@ for i in range(0,len(list_yellow_cone_random)):
     list_blue_cone_curve.append(blue_cone_copy)
     list_yellow_cone_curve.append(yellow_cone_copy)
 
-coneback=client.simGetObjectPoses("finish")
+coneback=client.simGetObjectPosesWithTag("finish")
 
 sen_sim=sensor.Sensor_Simulator()
 
 real_lidar=False
 image_output=False
-plote_animation=True
+plote_animation=False
 plote_signal=False
 first_person=True
 
@@ -154,15 +154,15 @@ cur_max=0
 #camera_msg_list=[None]*200
 #print(camera_msg_list)
 #kp~(0.03,1.0),ki~(0.06,0.3),kd:(0.0102,0.4)
-set_point_speed=3
+set_point_speed=20
 
 pid_speed=controller.PID_Controller(0.072, 0.06, 0.006, setpoint=set_point_speed,output_limits=(-1, 1))
 open_close_control_rate=0.5
 
 #kp~(0.1,3.6),ki~(0.3,0.3),kd:(0.069,0.4)
-set_point_steering=1.5
+set_point_steering=0
 
-pid_steering=controller.PID_Controller(0.9, 0.000,1.78, setpoint=set_point_steering,output_limits=(-1, 1))
+pid_steering=controller.PID_Controller(0.54, 0.00,0.72, setpoint=set_point_steering,output_limits=(-1, 1))
 
 action_controller=[0,0]
 
@@ -171,7 +171,7 @@ imitation_learn=False
 
 saver = tools.Saver(sess,LOAD,agent_i.actor,None,all_var,agent_i=True)
 Summary=tools.Summary()
-Summary_Scope=tools.Summary.Summary_Scope(plote_action=False,plote_speed=False,plote_cross_position=False,plote_predict_angle=False,\
+Summary_Scope=tools.Summary.Summary_Scope(plote_action=False,plote_speed=False,plote_cross_position=True,plote_predict_angle=False,\
                                     plote_predict_curverature=False)
 
 agent_i.actor.writer.add_graph(sess.graph,episode_counter)
@@ -306,16 +306,16 @@ while not rospy.is_shutdown():
         try:
             
             sin_projection_yellow=sen_sim.calculate_sinus_projection_closest_curve_point_pair(closest_yellow_curve_point_pair,\
-                                                                                              distance_between_closet_yellow_curve_point)
+                                                                                              distance_between_closet_yellow_curve_point)-2.5
             sin_projection_blue=sen_sim.calculate_sinus_projection_closest_curve_point_pair(closest_blue_curve_point_pair,\
                                                                                             distance_between_closet_blue_curve_point)
             sin_projection_difference=sin_projection_yellow-sin_projection_blue
             
-            if sin_projection_yellow>3:
+            if sin_projection_yellow>5:
                 
                 sin_projection_blue=sin_projection_blue*(-1)
                 
-            if sin_projection_blue>3:
+            if sin_projection_blue>5:
                 
                 sin_projection_yellow=sin_projection_yellow*(-1)
                 
@@ -451,6 +451,7 @@ while not rospy.is_shutdown():
 #            change_pid=4
 #
 #        if elapsed_time_setpoint>=10: 
+            
 #            car_controls.steering=(elapsed_time_setpoint-10)*0.01
 #            car_controls.steering=np.sin((elapsed_time_setpoint-10)/2)*0.1
 #        
@@ -468,25 +469,25 @@ while not rospy.is_shutdown():
             
             
 
-        try:
-            
-#            set_point_speed=(-1000)*(flattened_predict_curverature-np.abs(flattened_predict_curverature-agent.actor.predict_curverature[-2]))+20
-            set_point_speed=math.exp(5.9-flattened_predict_curverature)-349
-#            print(set_point_speed)
-
-            if set_point_speed<4:
-                
-                set_point_speed=4
+#        try:
 #            
-#            open_close_control_rate=(-24)*flattened_predict_curverature+0.9
-            
-            if open_close_control_rate<0:
-                
-                open_close_control_rate=0
-                
-        except:
-            
-            print('not ready!')
+##            set_point_speed=(-1000)*(flattened_predict_curverature-np.abs(flattened_predict_curverature-agent.actor.predict_curverature[-2]))+20
+#            set_point_speed=math.exp(5.9-flattened_predict_curverature)-349
+##            print(set_point_speed)
+#
+#            if set_point_speed<15:
+#                
+#                set_point_speed=15
+##            
+##            open_close_control_rate=(-24)*flattened_predict_curverature+0.9
+#            
+#            if open_close_control_rate<0:
+#                
+#                open_close_control_rate=0
+#                
+#        except:
+#            
+#            print('not ready!')
             
         agent.actor.speed.append(car_state.speed)
         agent.actor.set_point_speed.append(set_point_speed)
@@ -500,11 +501,15 @@ while not rospy.is_shutdown():
         pid_speed.setpoint=set_point_speed
         action_controller[0]=pid_speed(car_state.speed)
 #        action_controller[0]=1
-        
+#        if elapsed_time_setpoint>=10: 
+#            
+#            action_controller[0]=0
+            
         action_controller[1]=pid_steering(sin_projection_yellow)/((set_point_speed)**1)
         
-        car_controls.steering=predict_angle_difference/40*open_close_control_rate+action_controller[1]*(1-open_close_control_rate)
-#        car_controls.steering=action_controller[1]*0.1
+#        car_controls.steering=predict_angle_difference/40*open_close_control_rate+action_controller[1]*(1-open_close_control_rate)
+#        car_controls.steering=predict_angle_difference/40*0.5+action_controller[1]*0.1
+        car_controls.steering=action_controller[1]*0.5
         
         agent.actor.steering_angle_controller.append(car_controls.steering)
         
@@ -534,14 +539,16 @@ while not rospy.is_shutdown():
         
         agent.actor.odm_msg.append(ros_car_state_message[7])
         agent.actor.eul_msg.append(ros_car_state_message[8])
-
-        Summary_Scope.plot_summary(agent_i)
+        
+        if time_step%4==0:
+            
+            Summary_Scope.plot_summary(agent_i)
         
 #        elapsed_time_setpoint=time.time()-time_stamp_setpoint
-#        time_set.append(elapsed_time_setpoint)
+        time_set.append(elapsed_time_setpoint)
 #        print("elapsed_time:",elapsed_time_setpoint)
         
-#        if elapsed_time_setpoint>=42:
+#        if elapsed_time_setpoint>=20:
 #            
 #            summary=True
             
@@ -588,7 +595,7 @@ while not rospy.is_shutdown():
     rate.sleep()
     elapsed_time=time.time()-time_stamp
     time_step +=1
-#    time_step_set.append(elapsed_time)
+    time_step_set.append(elapsed_time)
     print("elapsed_time:",elapsed_time)
 #    if elapsed_time>0.05:
 #        print("sth broke:%d"%(time_step))

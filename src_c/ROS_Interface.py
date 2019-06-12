@@ -10,9 +10,11 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32MultiArray
 from sensor_msgs.msg import Image, PointCloud2
 from airsim import ImageRequest
+
 import airsim
 import numpy as np
 import calculate as cal
+
 #import os
 #import matplotlib.pyplt as plt
 
@@ -61,15 +63,15 @@ def ros_car_state_message_creater(rospy,client,initial_velocoty_noise,seq,image=
         
         try:
             
-            img_rgba = img1d.reshape(response.height, response.width, 4)
+            img_rgba = img1d.reshape(response.height, response.width, 3)
 #            airsim.write_png(os.path.normpath('greener.png'), img_rgba) 
 #            np.save('/home/spikezz/RL project copy/img_data/%d'%(seq%150), img_rgba)
             image_msg = Image()
             image_msg.header.frame_id = str(seq%150)
             image_msg.height = img_rgba.shape[0];
             image_msg.width =  img_rgba.shape[1];
-            image_msg.encoding = 'rgba8';
-            image_msg.step = img_rgba.shape[0]*img_rgba.shape[1]*4
+            image_msg.encoding = 'rgb8';
+            image_msg.step = img_rgba.shape[0]*img_rgba.shape[1]*3
             image_msg.data = img_rgba.tobytes();
                 
         except:
@@ -86,8 +88,11 @@ def ros_car_state_message_creater(rospy,client,initial_velocoty_noise,seq,image=
     a_v_msg.y=car_state.kinematics_estimated.angular_velocity.to_Quaternionr().y_val
     a_v_msg.z=car_state.kinematics_estimated.angular_velocity.to_Quaternionr().z_val
     ros_state_message_.append(a_v_msg)
-    
-    (euv_msg.x,euv_msg.y,euv_msg.z)=cal.euler_from_quaternion([a_v_msg.x, a_v_msg.y, a_v_msg.z,a_v_msg.w])
+
+    euv_msg.x=car_state.kinematics_estimated.angular_velocity.x_val
+    euv_msg.y=car_state.kinematics_estimated.angular_velocity.y_val
+    euv_msg.z=car_state.kinematics_estimated.angular_velocity.z_val
+
     ros_state_message_.append(euv_msg)
     
     tws_msg.header.seq = 0
