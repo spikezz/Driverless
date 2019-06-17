@@ -22,12 +22,12 @@ import numpy as np
 
 time.sleep(3)
 
-remote_control=True
-plote_animation=False
-plote_scope=False
+remote_control=False
+plote_animation=True
+plote_scope=True
 model_data_recording=False
 episode_counter=0
-summary=False
+summary=True
 
 collision_distance=0.3
 collision=False
@@ -48,7 +48,7 @@ if remote_control:
     
     ros_subscriber=ros_interface.ros_subscriber
 
-rate = rospy.Rate(20) 
+rate = rospy.Rate(10)#*2
 
 lidar=Sensor.Sensor_Box.Real_Lidar(client)
 sensor=Sensor.Sensor_Box(client,ros_interface,initializer,lidar,episode_counter)
@@ -61,11 +61,13 @@ learning_phase=0
 
 if learning_phase==0:
     
-    agent_c=Agent.Agent_Controller(action_dim=2,kp_speed=0.072,ki_speed=0.06,kd_speed=0.006,limits_speed=(-1, 1),set_point_speed_min=3,\
+    agent_c=Agent.Agent_Controller(action_dim=2,kp_speed=0.072,ki_speed=0.06,kd_speed=0.006,limits_speed=(-1, 1),set_point_speed_min=5,\
                                    kp_steering=0.54,ki_steering=0,kd_steering=0.72,set_point_steering=0,limits_steering=(-1, 1))
     agent_i=Agent.Agent_Imitation(input_dim=50,action_dim=2,sess=sess)
     agent_i.writer.add_graph(sess.graph,episode_counter)
-    imitation_drive=True
+    imitation_drive=False
+    distance=0
+    speed_measurement=0
     
 elif learning_phase==1:
     
@@ -76,7 +78,10 @@ cone_set=Enviroment.Cone_set(client,initializer,ros_interface,sv,agent_c,draw_ma
 sess.run(tf.global_variables_initializer())
 
 cm=Sensor.Sensor_Box.Curverature_Meter()
-scope=Tools.Summary_Scope(plot_action=plote_scope,plot_speed=plote_scope,plot_time=True)
+scope=Tools.Summary_Scope(plot_action=plote_scope,plot_speed=plote_scope,plote_cross_position=plote_scope,plot_time=plote_scope)
+
+elapsed_time_entire_old=0
+porsition_old=[0,0,0]
 
 time_stamp_entire= time.time()
 
@@ -150,13 +155,19 @@ while not rospy.is_shutdown():
                 
                 agent_c.action[1]=sv.predict_angle_difference/34*agent_c.open_control_rate+\
                 (agent_c.steering_controller(sv.mittle_position)/((agent_c.set_point_speed)**1))*agent_c.close_control_rate
-                car_controls.steering=agent_c.action[1]
+                
+                if not imitation_drive:
+
+                    car_controls.steering=agent_c.action[1]
                 
                 agent_i.steering_angle_controller.append(agent_c.action[1])
                 
-                agent_i.diff_throttle.append(agent_c.action[0]-agent_i.action[0])
-                agent_i.diff_brake.append(agent_c.action[0]-agent_i.action[0])
-                agent_i.diff_steering.append(agent_c.action[1]-agent_i.action[1])
+                agent_i.action_0_controller.append(agent_c.action[0])
+                agent_i.action_0_imitation.append(agent_i.action[0])
+                agent_i.diff_action_0.append(agent_c.action[0]-agent_i.action[0])
+                agent_i.action_1_controller.append(agent_c.action[1])
+                agent_i.action_1_imitation.append(agent_i.action[1])
+                agent_i.diff_action_1.append(agent_c.action[1]-agent_i.action[1])
                 
                 client.setCarControls(car_controls) 
                     
@@ -177,7 +188,7 @@ while not rospy.is_shutdown():
                     agent_i.M.store_transition(agent_i.observation_old,agent_i.action,agent_c.action)
                 
                 if sv.sin_projection_yellow<collision_distance or sv.sin_projection_blue<collision_distance:
-     
+                    print('collision!!!')
                     collision=True
                     summary=True
                     
@@ -209,22 +220,33 @@ while not rospy.is_shutdown():
             agent_c.reset(client,car_controls)
             time.sleep(3)
             time_stamp_entire= time.time()
+            print('episode_counter:',episode_counter)
             
+            if episode_counter>agent_i.memory_capacity_boundary :
+                
+                imitation_drive=True
     else:
         
-        if episode_counter%64==0:
+        if episode_counter%16==0:
             
             scope.plot_summary(agent_i) 
             
-        ros_publisher['pub_blue_cone'].publish(cone_set.blue_cone_message)
-        ros_publisher['pub_yellow_cone'].publish(cone_set.yellow_cone_message)
-        ros_publisher['pub_odometry_auto'].publish(sensor.car_state_message[5])
+#        print(sensor.car_state_message[5]) 
+#        print(sensor.velocity_2d_correction) 
+#        sensor.car_state_message[5].twist.twist.linear.x=sensor.velocity_2d_correction[1][0]
+#        sensor.car_state_message[5].twist.twist.linear.y=sensor.velocity_2d_correction[1][1]
+#        print(sensor.car_state_message[5]) 
+#        ros_publisher['pub_blue_cone'].publish(cone_set.blue_cone_message)
+#        ros_publisher['pub_yellow_cone'].publish(cone_set.yellow_cone_message)
+#        ros_publisher['pub_odometry_auto'].publish(sensor.car_state_message[5])
         
     rate.sleep()
     elapsed_time_entire=time.time()-time_stamp_entire
     agent_i.time_step_set_episode.append(elapsed_time_entire)
     elapsed_time_cycle=time.time()-time_stamp_cycle
     agent_i.time_step_set.append(elapsed_time_cycle)
+ 
+   
 #    print('elapsed_time_entire',elapsed_time_entire)
 #    print('elapsed_time_cycle',elapsed_time_cycle)
     episode_counter+=1

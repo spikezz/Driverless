@@ -149,7 +149,8 @@ class ROS_Interface(object):
             except:
                 
                 print("Image acquisition failed")    
-            
+        #0:linear_velocity,1:angular_velocity_q,2:angular_velocity_e,3:linear_acceleration,
+        #4:angular_acceleration,5:odometry,6:euler_orientation,7:image
         vel_msg.x=car_state.kinematics_estimated.linear_velocity.x_val-initializer.initial_velocoty_noise[0]
         vel_msg.y=car_state.kinematics_estimated.linear_velocity.y_val-initializer.initial_velocoty_noise[1]
         vel_msg.z=car_state.kinematics_estimated.linear_velocity.z_val-initializer.initial_velocoty_noise[2]

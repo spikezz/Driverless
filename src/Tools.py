@@ -24,16 +24,22 @@ class Summary_Scope(object):
             self.fig.subplots_adjust(left=0.05, bottom=0.05, right=0.95, top=0.95) 
             plt.ion()
             
-    def __init__(self,plot_action=False,plot_speed=False,plot_time=False):
+    def __init__(self,plot_action=False,plot_speed=False,plote_cross_position=False,plot_time=False):
         
         if plot_action:
-            
-            self.action_ploter=self.Summary_Ploter(row=1, column=3)
+            self.action_ploter_origin=[None,None]
+            self.action_ploter_origin[0]=self.Summary_Ploter(row=1, column=1)
+            self.action_ploter_origin[1]=self.Summary_Ploter(row=1, column=1)
+#            self.action_ploter=self.Summary_Ploter(row=1, column=3)
         
         if plot_speed:
             
             self.speed_ploter=self.Summary_Ploter(row=1, column=1)
-        
+            
+        if plote_cross_position:
+            
+            self.cross_position_ploter=self.Summary_Ploter(row=1, column=1)
+            
         if plot_time:
             
             self.time_ploter=self.Summary_Ploter(row=1, column=1)
@@ -46,7 +52,6 @@ class Summary_Scope(object):
             self.action_ploter.ax[0].clear()
             self.action_ploter.ax[0].plot(agent.throttle_controller,'r',linewidth=0.5,label='throttle controller')
             self.action_ploter.ax[0].plot(agent.throttle_imitation,'g',linewidth=0.5,label='throttle imitation')
-            self.action_ploter.ax[0].plot(agent.diff_throttle,'b',linewidth=0.5,label='throttle difference')
             self.action_ploter.ax[0].legend(loc='lower left')
             self.action_ploter.ax[0].set_xlabel('steps')
             self.action_ploter.ax[0].set_ylabel('throttle')
@@ -60,12 +65,11 @@ class Summary_Scope(object):
             self.action_ploter.ax[1].set_xlabel('steps')
             self.action_ploter.ax[1].set_ylabel('brake')
             ##brake
-
+            
             #steering
             self.action_ploter.ax[2].clear()
             self.action_ploter.ax[2].plot(agent.steering_angle_controller,'r',linewidth=0.5,label='steering controller')
             self.action_ploter.ax[2].plot(agent.steering_angle_imitation,'g',linewidth=0.5,label='steering imitation')
-            self.action_ploter.ax[2].plot(agent.diff_steering,'b',linewidth=0.5,label='steering difference')
             self.action_ploter.ax[2].legend(loc='lower left')
             self.action_ploter.ax[2].set_xlabel('steps')
             self.action_ploter.ax[2].set_ylabel('steering')
@@ -74,13 +78,34 @@ class Summary_Scope(object):
             self.action_ploter.fig = plt.gcf() 
             self.action_ploter.fig.canvas.draw() 
             self.action_ploter.fig.canvas.flush_events() 
-        
+            
+        #original action
+        if hasattr(self, 'action_ploter_origin'):
+            
+            #action origin
+            self.action_ploter_origin[0].ax[0].clear()
+            self.action_ploter_origin[0].ax[0].plot(agent.action_0_controller,'r',linewidth=0.5,label='action[0] controller')
+            self.action_ploter_origin[0].ax[0].plot(agent.action_0_imitation,'g',linewidth=0.5,label='action[0] imitation')
+#            self.action_ploter_origin[0].ax[0].plot(agent.diff_action_0,'b',linewidth=0.5,label='action[0] difference')
+            self.action_ploter_origin[0].ax[0].legend(loc='lower left')
+            self.action_ploter_origin[0].ax[0].set_xlabel('steps')
+            self.action_ploter_origin[0].ax[0].set_ylabel('throttle and brake')
+            
+            self.action_ploter_origin[1].ax[0].clear()
+            self.action_ploter_origin[1].ax[0].plot(agent.action_1_controller,'r',linewidth=0.5,label='action[1] controller')
+            self.action_ploter_origin[1].ax[0].plot(agent.action_1_imitation,'g',linewidth=0.5,label='action[1] imitation')
+#            self.action_ploter_origin[1].ax[0].plot(agent.diff_action_1,'b',linewidth=0.5,label='action[1] difference')
+            self.action_ploter_origin[1].ax[0].legend(loc='lower left')
+            self.action_ploter_origin[1].ax[0].set_xlabel('steps')
+            self.action_ploter_origin[1].ax[0].set_ylabel('steering')        
+            #action origin
+            
         #speed   
         if hasattr(self, 'speed_ploter'):
             
             self.speed_ploter.ax[0].clear()
             self.speed_ploter.ax[0].plot(agent.speed,'r',linewidth=0.5,label='speed')
-            self.speed_ploter.ax[0].plot(agent.set_point_speed,'g',linewidth=0.5,label='speed set point')
+            self.speed_ploter.ax[0].plot(agent.set_point_speed,'g',linewidth=0.5,label='speed setpoint')
             self.speed_ploter.ax[0].plot(agent.optic_speed,'b',linewidth=0.5,label='optic speed')
             self.speed_ploter.ax[0].legend(loc='lower left')
             self.speed_ploter.ax[0].set_xlabel('steps')
@@ -90,6 +115,22 @@ class Summary_Scope(object):
             self.speed_ploter.fig.canvas.draw() 
             self.speed_ploter.fig.canvas.flush_events() 
             
+        #cross position  
+        if hasattr(self, 'cross_position_ploter'):
+            
+            self.cross_position_ploter.ax[0].clear()
+            self.cross_position_ploter.ax[0].plot(agent.lateral_position,'r',linewidth=0.5,label='lateral position')
+            self.cross_position_ploter.ax[0].plot(agent.set_point_lateral_position,'g',linewidth=0.5,label='lateral position setpoint')
+            self.cross_position_ploter.ax[0].legend(loc='lower left')
+            self.cross_position_ploter.ax[0].set_xlabel('steps')
+            self.cross_position_ploter.ax[0].set_ylabel('lateral position m')
+    
+            self.cross_position_ploter.fig = plt.gcf() 
+            self.cross_position_ploter.fig.canvas.draw() 
+            self.cross_position_ploter.fig.canvas.flush_events() 
+            
+        
+        #time
         if hasattr(self, 'time_ploter'):
                 
             self.time_ploter.ax[0].clear()

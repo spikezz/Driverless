@@ -27,8 +27,8 @@ class Agent_Controller(object):
         self.state_idx=0
         self.recorder_switch=0
         self.predict_step_angle=3
-        self.predict_step=16
-        self.curverature_sample_step=8
+        self.predict_step=12
+        self.curverature_sample_step=6
         self.open_control_rate=0.4
         self.close_control_rate=1-self.open_control_rate
         self.set_point_speed=set_point_speed_min
@@ -91,13 +91,13 @@ class Agent_Imitation(object):
         #action limits
         self.action_boundary=np.array([1.0,1.0])
         # imitation learning rate for actor
-        self.lr_i = 6.25e-6
+        self.lr_i = 6.25e-5
         #initial memory capacity
-        self.memory_capacity = 512
+        self.memory_capacity = 64
         #memory capacity upper bound
-        self.memory_capacity_boundary = 8192
+        self.memory_capacity_boundary = 16384
         #size of memory slice
-        self.memory_batch = 16
+        self.memory_batch = 8
         #load model
         self.load=False
         #action of Agent
@@ -119,15 +119,19 @@ class Agent_Imitation(object):
         #data history:steering
         self.steering_angle_controller=[]
         self.steering_angle_imitation=[]
-        self.diff_steering=[]
         #data history:throttle
         self.throttle_controller=[]
         self.throttle_imitation=[]
-        self.diff_throttle=[]
         #data history:brake
         self.brake_controller=[]
         self.brake_imitation=[]
-        self.diff_brake=[]
+        #origin action
+        self.action_0_controller=[]
+        self.action_0_imitation=[]
+        self.diff_action_0=[]
+        self.action_1_controller=[]
+        self.action_1_imitation=[]
+        self.diff_action_1=[]
         #data history:speed
         self.speed=[]
         self.set_point_speed=[]
@@ -177,12 +181,18 @@ class Agent_Imitation(object):
             observation_temp[1]=np.vstack(observation_temp[1]).ravel()
         
         observation_temp[2]=np.vstack([sensor.car_state.speed/5]).ravel()
-        observation_temp[3]=np.vstack([sensor.velocity_2d_correction[1][0]/5,sensor.velocity_2d_correction[1][1]/5]).ravel()
-        observation_temp[4]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()
-        observation_temp[5]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()
-        observation_temp[6]=np.vstack([car_controls.steering*3]).ravel()
+#        observation_temp[3]=np.vstack([sensor.velocity_2d_correction[1][0]/5,sensor.velocity_2d_correction[1][1]/5]).ravel()
+#        observation_temp[4]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()
+#        observation_temp[5]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()
+#        observation_temp[6]=np.vstack([car_controls.steering*3]).ravel()
+#        
+#        observation_temp_pack=np.hstack((observation_temp[2],observation_temp[3],observation_temp[4],observation_temp[5],observation_temp[6]))  
+
+        observation_temp[3]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()
+        observation_temp[4]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()
+        observation_temp[5]=np.vstack([car_controls.steering*3]).ravel()
         
-        observation_temp_pack=np.hstack((observation_temp[2],observation_temp[3],observation_temp[4],observation_temp[5],observation_temp[6]))  
+        observation_temp_pack=np.hstack((observation_temp[2],observation_temp[3],observation_temp[4],observation_temp[5]))  
 #        print('0',observation_temp[0])
 #        print('1',observation_temp[1])
 #        print('2',observation_temp[2])
@@ -223,15 +233,19 @@ class Agent_Imitation(object):
         #data history:steering
         self.steering_angle_controller=[]
         self.steering_angle_imitation=[]
-        self.diff_steering=[]
         #data history:throttle
         self.throttle_controller=[]
         self.throttle_imitation=[]
-        self.diff_throttle=[]
         #data history:brake
         self.brake_controller=[]
         self.brake_imitation=[]
-        self.diff_brake=[]
+        #origin action
+        self.action_0_controller=[]
+        self.action_0_imitation=[]
+        self.diff_action_0=[]
+        self.action_1_controller=[]
+        self.action_1_imitation=[]
+        self.diff_action_1=[]
         #data history:speed
         self.speed=[]
         self.set_point_speed=[]

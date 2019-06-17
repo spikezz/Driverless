@@ -27,12 +27,15 @@ class Actor_Imitation(object):
         with tf.name_scope('Action_Controller'):
             
             self.A_C = tf.placeholder(tf.float32, [None, action_dim], name='a_c')
-            
-#        self.H_a=[2780,2780,2780]    
+        
+#        self.H_a=[2780,2780]    
 #        self.H_a=[2780,1450,110]
 #        self.H_a=[1390,750,110]
-        self.H_a=[1390,970,540,110]
-#        self.H_a=[90]
+#        self.H_a=[1390,1390,1390]
+        self.H_a=[2780,1890,1000,110]
+#        self.H_a=[1390,970,540,110]
+#        self.H_a=[970,690,400,110]
+#        self.H_a=[1390,1070,750,430,110]
         self.momentum = 0.9
         self.std_decay=tf.constant(0.99999)
         self.sess=sess
@@ -44,7 +47,7 @@ class Actor_Imitation(object):
         
         with tf.variable_scope('actor_imitation'):
             
-            self.a = self._build_net(agent,self.S,dropout_rate=0, batch_normalization=False,summeraize_parameter=False,\
+            self.a = self._build_net(agent,self.S,dropout_rate=0.05, batch_normalization=False,summeraize_parameter=False,\
                                      summeraize_output=False, trainable=True)
             
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='actor_imitation')
@@ -60,8 +63,8 @@ class Actor_Imitation(object):
             with tf.control_dependencies(update_ops):
                 
 #                self.train_imitation=tf.train.MomentumOptimizer(self.lr_i,self.momentum) .minimize(self.loss_imitation) 
-#                self.opt_i = tf.train.AdamOptimizer(self.lr_i)
-                self.opt_i = tf.train.MomentumOptimizer(self.lr_i,self.momentum)  
+                self.opt_i = tf.train.AdamOptimizer(self.lr_i)
+#                self.opt_i = tf.train.MomentumOptimizer(self.lr_i,self.momentum)  
                 self.i_grads = tf.gradients(ys=self.loss_imitation, xs=self.e_params, grad_ys=None)
                 self.i_grads_filter=[]
                 self.e_params_filter=[]
@@ -70,13 +73,6 @@ class Actor_Imitation(object):
 #                print('self.e_params:',self.e_params)
 #                print('e_params length:',len(self.e_params))
                 
-                self.print_list=[]
-                
-                for g in self.i_grads:
-                    
-                    if g !=None:
-                        
-                        self.print_list.append(g)
 
 #                self.P_i_grads=tf.Print(self.i_grads,self.i_grads,message='self.i_grads:',summarize=1024)
                 
@@ -193,7 +189,9 @@ class Actor_Imitation(object):
             
             w_collection_action = tf.get_variable('weight_actor_action', [self.H_a[-1], self.action_dimension], initializer=init_w, trainable=trainable)
             #leCun Tanh
-            action= 1.7519 * tf.nn.tanh(2*tf.matmul(layer[-1], w_collection_action)/3)
+#            action= 1.7519 * tf.nn.tanh(2*tf.matmul(layer[-1], w_collection_action)/3)
+            action= tf.nn.tanh(tf.matmul(layer[-1], w_collection_action))
+#            action= tf.nn.tanh(tf.matmul(layer[-1], w_collection_action)/5)
 #            action= tf.matmul(layer[-1], w_collection_action)
             if summeraize_parameter==True:
                 

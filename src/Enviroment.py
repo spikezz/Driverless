@@ -115,7 +115,7 @@ class Cone_set(object):
         
         if draw_map:
             
-            self.global_map=self.Global_Map_Ploter([-110,90],[-30,170],[12.8, 9.6])
+            self.global_map=self.Global_Map_Ploter([-300,-50],[-100,150],[12.8, 9.6])
             
             #display
             self.blue_cone_spline_display=self.draw_cone_spline(self.list_blue_cone_display,'b',self.global_map,draw=draw_map)
