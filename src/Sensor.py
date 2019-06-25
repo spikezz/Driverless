@@ -26,7 +26,6 @@ class Sensor_Box(object):
             def __init__(self,xlim,ylim,fig_size):
                 
                 self.fig = plt.figure(figsize=fig_size)
-#                self.fig.show()
                 self.ax = self.fig.add_subplot(1,1,1)
                 self.fig.subplots_adjust(left=0.2, bottom=0.1, right=0.8, top=0.9)
                 self.ax.set_xlim(xlim[0], xlim[1])
@@ -49,7 +48,7 @@ class Sensor_Box(object):
             def clear(self):
                 
                 self.ax.lines.clear()
-                
+            
             def roatat_point(self,point,eul_msg):
         
                 sita_of_curve_point_and_car=Functions.calculate_sita_of_radius([0,0],point[1])-math.degrees(eul_msg.z)
@@ -63,12 +62,15 @@ class Sensor_Box(object):
                     sita_of_curve_point_and_car=sita_of_curve_point_and_car+360
         
                 point[1]=Functions.calculate_rotated_point(0,point[0],sita_of_curve_point_and_car)
-                
+ 
             def rotate_sight(self,list_cone_sensored_sita,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,\
-                     predict_yellow_curve_point_pair,predict_blue_curve_point_pair,predict_yellow_curverature_point,\
-                     predict_blue_curverature_point,velocity_2d_correction,eul_msg):
-
+                             horizon_blue_cone_pair,horizon_yellow_cone_pair,predict_yellow_curve_point_pair,predict_blue_curve_point_pair,\
+                             predict_yellow_curverature_point,predict_blue_curverature_point,velocity_2d_correction,vector_closest_yellow_cone,\
+                             vector_closest_blue_cone,eul_msg):
+                
                 self.roatat_point(velocity_2d_correction,eul_msg)
+                self.roatat_point(vector_closest_yellow_cone,eul_msg)
+                self.roatat_point(vector_closest_blue_cone,eul_msg)
                 
                 for i in range(0,len(list_cone_sensored_sita)):
                     
@@ -100,10 +102,10 @@ class Sensor_Box(object):
     
         def __init__(self,draw_sight):
             
-            self.sensor_boundary=15
+            self.sensor_boundary=16
             
             self.cone_marker='^'
-            self.cone_wide=0.1
+            self.cone_wide=0.2
             
             self.car_length=2.8
             self.track_width=5
@@ -112,7 +114,7 @@ class Sensor_Box(object):
                 
                 self.lidar_top_view=self.Top_View_Ploter([-15,15],[-15,15],[6.4, 4.8])
         
-        def update(self,cone_set,sensor,agent_controller,agent_imitation,curverature_meter,draw_sight=False,first_person=True):
+        def update(self,cone_set,sensor,agent_controller,agent_imitation,curverature_meter,draw_sight=False,first_person=False):
             
             self.list_yellow_cone_sensored_sita=self.find_sensored_cone(cone_set.list_yellow_cone,sensor.car_state_message[5],sensor.car_state_message[6],color='y')
             self.list_blue_cone_sensored_sita= self.find_sensored_cone(cone_set.list_blue_cone,sensor.car_state_message[5],sensor.car_state_message[6],color='b')
@@ -124,38 +126,44 @@ class Sensor_Box(object):
             self.list_sensored_cone_yellow_covered_free,self.list_sensored_cone_blue_covered_free=self.cover_cone(self.list_cone_sensored_sita)
             self.list_sensored_cone_covered_free=self.list_sensored_cone_yellow_covered_free+self.list_sensored_cone_blue_covered_free
             
-            if len(self.list_sensored_cone_yellow_covered_free)>=2:
-            
+            if len(self.list_sensored_cone_yellow_covered_free)==0:
+                
+                print("no yellow cone detected")
+
+            elif len(self.list_sensored_cone_yellow_covered_free)==1:
+                    
+                self.closest_yellow_cone=self.list_sensored_cone_yellow_covered_free
+                print("single yellow cone")
+                           
+            else:
+                
+                self.horizon_yellow_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_yellow_covered_free)
+                self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone=self.calculate_distance_closest_cone_pair(self.horizon_yellow_cone_pair)
+                self.vector_horizon_yellow_cone_rotate=[self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone]
+                
                 self.closest_yellow_cone_pair=self.find_closest_cone_pair(self.list_sensored_cone_yellow_covered_free)
                 self.distance_between_yellow_cone,self.vector_closest_yellow_cone=self.calculate_distance_closest_cone_pair(self.closest_yellow_cone_pair)
+                self.vector_closest_yellow_cone_rotate=[self.distance_between_yellow_cone,self.vector_closest_yellow_cone]
                 
+            if len(self.list_sensored_cone_blue_covered_free)==0:
+                
+                print("no blue cone detected")
+                    
+            elif len(self.list_sensored_cone_blue_covered_free)==1:
+                    
+                self.closest_blue_cone=self.list_sensored_cone_blue_covered_free
+                print("single blue cone")
+            
             else:
-    
-                if len(self.list_sensored_cone_yellow_covered_free)==1:
-    
-                    self.closest_yellow_cone=self.list_sensored_cone_yellow_covered_free
-                    print("single yellow cone")
-                    
-                else:
-                    
-                    print("no yellow cone detected")
-                    
-            if len(self.list_sensored_cone_blue_covered_free)>=2:
                 
+                self.horizon_blue_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_blue_covered_free)
+                self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone=self.calculate_distance_closest_cone_pair(self.horizon_blue_cone_pair)
+                self.vector_horizon_blue_cone_rotate=[self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone]
+                    
                 self.closest_blue_cone_pair=self.find_closest_cone_pair(self.list_sensored_cone_blue_covered_free)
-                self.distance_between_blue_cone,self.vector_closest_blue_yellow_cone=self.calculate_distance_closest_cone_pair(self.closest_blue_cone_pair)
-                
-            else:
-    
-                if len(self.list_sensored_cone_blue_covered_free)==1:
-                    
-                    self.closest_blue_cone=self.list_sensored_cone_blue_covered_free
-                    print("single blue cone")
-                    
-                else:
-                    
-                    print("no blue cone detected")
-                
+                self.distance_between_blue_cone,self.vector_closest_blue_cone=self.calculate_distance_closest_cone_pair(self.closest_blue_cone_pair)
+                self.vector_closest_blue_cone_rotate=[self.distance_between_blue_cone,self.vector_closest_blue_cone]
+               
             self.closest_yellow_curve_point_pair,self.predict_yellow_curve_point_pair,self.predict_yellow_curverature_point=\
             self.find_closest_curve_point_pair(cone_set.yellow_cone_spline,sensor.car_state_message[5],agent_controller.predict_step,\
                                                agent_controller.curverature_sample_step,agent_controller.predict_step_angle)
@@ -221,9 +229,11 @@ class Sensor_Box(object):
                 if first_person:
                     
                     self.lidar_top_view.rotate_sight(self.list_cone_sensored_sita,self.closest_yellow_curve_point_pair,self.closest_blue_curve_point_pair,\
-                                         self.predict_yellow_curve_point_pair,self.predict_blue_curve_point_pair,self.predict_yellow_curverature_point_c,\
-                                         self.predict_blue_curverature_point_c,sensor.velocity_2d_correction,sensor.car_state_message[6])  
-            
+                                                     self.horizon_blue_cone_pair,self.horizon_yellow_cone_pair,self.predict_yellow_curve_point_pair,\
+                                                     self.predict_blue_curve_point_pair,self.predict_yellow_curverature_point_c,self.predict_blue_curverature_point_c,\
+                                                     sensor.velocity_2d_correction,self.vector_closest_yellow_cone_rotate,self.vector_closest_blue_cone_rotate,\
+                                                     sensor.car_state_message[6])  
+                   
             x_center_yellow,y_center_yellow,r_yellow,circle_norm_vector_yellow=Functions.calculate_circle_curverature_with_3p([self.predict_yellow_curverature_point_c[0][1][1],\
                                                                     self.predict_yellow_curverature_point_c[1][1][1],self.predict_yellow_curverature_point_c[2][1][1]],\
                                                                     [self.predict_yellow_curverature_point_c[0][1][0],self.predict_yellow_curverature_point_c[1][1][0],\
@@ -240,9 +250,11 @@ class Sensor_Box(object):
             if draw_sight:
                     
                 x_rs,y_rs = Functions.calculate_circle(x_center_yellow,y_center_yellow,r_yellow)
-                self.plot_all(self.list_cone_sensored_sita,self.closest_yellow_curve_point_pair,self.closest_blue_curve_point_pair,\
-                                 self.predict_yellow_curve_point_pair,self.predict_blue_curve_point_pair,self.predict_yellow_curverature_point_c,\
-                                 self.predict_blue_curverature_point_c,x_rs,y_rs,self.lidar_top_view,sensor,sensor.car_state_message[6],first_person)
+                self.plot_all(self.list_cone_sensored_sita,self.closest_yellow_cone_pair,self.closest_blue_cone_pair,self.horizon_yellow_cone_pair,\
+                              self.horizon_blue_cone_pair,self.closest_yellow_curve_point_pair,self.closest_blue_curve_point_pair,\
+                              self.predict_yellow_curve_point_pair,self.predict_blue_curve_point_pair,\
+                              self.predict_yellow_curverature_point_c,self.predict_blue_curverature_point_c,\
+                              x_rs,y_rs,self.lidar_top_view,sensor,sensor.car_state_message[6],first_person)       
             
         def cover_cone(self,list_sensored_cone_sort_with_sita):
         
@@ -326,7 +338,7 @@ class Sensor_Box(object):
                         
                     if sita_of_cone_and_car<=90 and sita_of_cone_and_car>=-90:
     
-                        list_sensored_cone.append([cone_distance,sita_of_cone_and_car,cone_vector,color,self.cone_marker])
+                        list_sensored_cone.append([cone_distance,sita_of_cone_and_car,cone_vector,color,self.cone_marker,np.abs(sita_of_cone_and_car)])
                        
             return list_sensored_cone
         
@@ -426,23 +438,35 @@ class Sensor_Box(object):
             
             return [list_cone[0],list_cone[1]]
         
-        def plot_all(self,list_sensored_cone_sort_with_sita_covered,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,\
-                 predict_yellow_curve_point_pair,predict_blue_curve_point_pair,predict_yellow_curverature_point,\
-                 predict_blue_curverature_point,x_rs,y_rs,ploter,sensor,eul_msg,first_person):
+        def find_horizon_cone_pair(self,list_cone,):
         
-      
+            list_cone=sorted(list_cone,key=lambda x:x[5])
+
+            return [list_cone[0],list_cone[1]]
+        
+        def plot_all(self,list_sensored_cone_sort_with_sita_covered,closest_yellow_cone_pair,closest_blue_cone_pair,horizon_yellow_cone_pair,\
+                     horizon_blue_cone_pair,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,predict_yellow_curve_point_pair,\
+                     predict_blue_curve_point_pair,predict_yellow_curverature_point,predict_blue_curverature_point,x_rs,y_rs,ploter,sensor,eul_msg,first_person):
         
             for i in range (len(list_sensored_cone_sort_with_sita_covered)):
                 
                 self.lidar_top_view.draw_line([0,list_sensored_cone_sort_with_sita_covered[i][2][1]],\
                                 [0,list_sensored_cone_sort_with_sita_covered[i][2][0]],\
-                                ploter,list_sensored_cone_sort_with_sita_covered[i][3],list_sensored_cone_sort_with_sita_covered[i][4],5,0.5,None)
-            #
-            self.lidar_top_view.draw_line([self.closest_yellow_cone_pair[0][2][1],self.closest_yellow_cone_pair[1][2][1]],\
-                                          [self.closest_yellow_cone_pair[0][2][0],self.closest_yellow_cone_pair[1][2][0]],ploter,'b','$yellow\ cone\ vector$',50,0.5,None)
+                                ploter,list_sensored_cone_sort_with_sita_covered[i][3],list_sensored_cone_sort_with_sita_covered[i][4],10,0.5,None)
             
-            self.lidar_top_view.draw_line([self.closest_blue_cone_pair[0][2][1],self.closest_blue_cone_pair[1][2][1]],\
-                                          [self.closest_blue_cone_pair[0][2][0],self.closest_blue_cone_pair[1][2][0]],ploter,'y','$blue\ cone\ vector$',50,0.5,None)
+            #vector cone horizon
+            self.lidar_top_view.draw_line([horizon_yellow_cone_pair[0][2][1],horizon_yellow_cone_pair[1][2][1]],\
+                                          [horizon_yellow_cone_pair[0][2][0],horizon_yellow_cone_pair[1][2][0]],ploter,'b','$h_y$',10,3,None)
+            
+            self.lidar_top_view.draw_line([horizon_blue_cone_pair[0][2][1],horizon_blue_cone_pair[1][2][1]],\
+                                          [horizon_blue_cone_pair[0][2][0],horizon_blue_cone_pair[1][2][0]],ploter,'y','$h_b$',10,3,None)
+            
+#            #vector cone closest
+#            self.lidar_top_view.draw_line([closest_yellow_cone_pair[0][2][1],closest_yellow_cone_pair[1][2][1]],\
+#                                          [closest_yellow_cone_pair[0][2][0],closest_yellow_cone_pair[1][2][0]],ploter,'b','$c_y$',10,3,None)
+#            
+#            self.lidar_top_view.draw_line([closest_blue_cone_pair[0][2][1],closest_blue_cone_pair[1][2][1]],\
+#                                          [closest_blue_cone_pair[0][2][0],closest_blue_cone_pair[1][2][0]],ploter,'y','$c_b$',10,3,None)
             #projection point
             self.lidar_top_view.draw_line([closest_yellow_curve_point_pair[0][1][1],closest_yellow_curve_point_pair[1][1][1]],\
                                           [closest_yellow_curve_point_pair[0][1][0], closest_yellow_curve_point_pair[1][1][0]],ploter,'b','o',5,3,None)
@@ -473,13 +497,13 @@ class Sensor_Box(object):
                 
          
                 #velocity
-                self.lidar_top_view.draw_line([0,sensor.car_state_message[0].y],[0,sensor.car_state_message[0].x],ploter,'aqua','d',5,0.5,None)
-                
+                self.lidar_top_view.draw_line([0,sensor.car_state_message[0].y],[0,sensor.car_state_message[0].x],ploter,'aqua','$velocity$',30,0.5,None)
 
-                car_x=math.cos(eul_msg.z)*self.car_length*0.5
-                car_y=math.sin(eul_msg.z)*self.car_length*0.5
-                #car_point
-                self.lidar_top_view.draw_line([-car_y,car_y],[-car_x,car_x],ploter,'r','o',5,12,None)
+                #yellow cone vector
+                self.lidar_top_view.draw_line([0,self.vector_closest_yellow_cone[1]],[0,self.vector_closest_yellow_cone[0]],ploter,'gold','$v_y$',10,2,None)
+
+                #blue cone vector
+                self.lidar_top_view.draw_line([0,self.vector_closest_blue_cone[1]],[0,self.vector_closest_blue_cone[0]],ploter,'darkblue','$v_b$',10,2,None)
 
                 car_x=math.cos(eul_msg.z)*self.car_length*0.5
                 car_y=math.sin(eul_msg.z)*self.car_length*0.5
@@ -489,34 +513,40 @@ class Sensor_Box(object):
                 lidar_front_x=math.cos(eul_msg.z)*self.sensor_boundary
                 lidar_front_y=math.sin(eul_msg.z)*self.sensor_boundary
                 #lidar_front_line
-                self.lidar_top_view.draw_line([0,lidar_front_y],[0,lidar_front_x],ploter,'g','x',5,1,None)
+                self.lidar_top_view.draw_line([0,lidar_front_y],[0,lidar_front_x],ploter,'g','x',10,1,None)
                 
                 lidar_right_x=math.cos(eul_msg.z+math.pi/2)*self.sensor_boundary
                 lidar_right_y=math.sin(eul_msg.z+math.pi/2)*self.sensor_boundary
                 #lidar_right_line
-                self.lidar_top_view.draw_line([0,lidar_right_y],[0,lidar_right_x],ploter,'g','x',5,1,None)
+                self.lidar_top_view.draw_line([0,lidar_right_y],[0,lidar_right_x],ploter,'g','x',10,1,None)
               
                 lidar_left_x=math.cos(eul_msg.z-math.pi/2)*self.sensor_boundary
                 lidar_left_y=math.sin(eul_msg.z-math.pi/2)*self.sensor_boundary
                 #lidar_left_line
-                self.lidar_top_view.draw_line([0,lidar_left_y],[0,lidar_left_x],ploter,'g','x',5,1,None)
+                self.lidar_top_view.draw_line([0,lidar_left_y],[0,lidar_left_x],ploter,'g','x',10,1,None)
                 
             else:
                 
-                #velocity
-                self.lidar_top_view.draw_line([0,sensor.velocity_2d_correction[1][1]],[0,sensor.velocity_2d_correction[1][0]],ploter,'aqua','d',5,0.5,None)
-                
+#                #velocity
+#                self.lidar_top_view.draw_line([0,sensor.velocity_2d_correction[1][1]],[0,sensor.velocity_2d_correction[1][0]],ploter,'aqua','$velocity$',30,0.5,None)
+#
+#                #yellow cone vector
+#                self.lidar_top_view.draw_line([0,self.vector_closest_yellow_cone_rotate[1][1]],[0,self.vector_closest_yellow_cone_rotate[1][0]],ploter,'gold','$v_y$',10,2,None)
+#
+#                #blue cone vector
+#                self.lidar_top_view.draw_line([0,self.vector_closest_blue_cone_rotate[1][1]],[0,self.vector_closest_blue_cone_rotate[1][0]],ploter,'darkblue','$v_b$',10,2,None)
+#               
                 #car_point
                 self.lidar_top_view.draw_line([0,0],[-self.car_length*0.5,self.car_length*0.5],ploter,'r','o',5,12,None)
                 
                 #lidar_front_line
-                self.lidar_top_view.draw_line([0,0],[0,self.sensor_boundary],ploter,'g','x',5,1,None)
+                self.lidar_top_view.draw_line([0,0],[0,self.sensor_boundary],ploter,'g','x',10,1,None)
                 
                 #lidar_right_line
-                self.lidar_top_view.draw_line([0,self.sensor_boundary],[0,0],ploter,'g','x',5,1,None)
+                self.lidar_top_view.draw_line([0,self.sensor_boundary],[0,0],ploter,'g','x',10,1,None)
                 
                 #lidar_left_line
-                self.lidar_top_view.draw_line([0,-self.sensor_boundary],[0,0],ploter,'g','x',5,1,None)
+                self.lidar_top_view.draw_line([0,-self.sensor_boundary],[0,0],ploter,'g','x',10,1,None)
     
             ploter.fig = plt.gcf() 
             ploter.fig.canvas.draw() 
@@ -526,8 +556,8 @@ class Sensor_Box(object):
             
             distance_between_cone=Functions.calculate_radius(closest_cone_pair[0][2],closest_cone_pair[1][2])
             vector_closest_cone=np.array(closest_cone_pair[1][2])-np.array(closest_cone_pair[0][2])
-    
-            return distance_between_cone,vector_closest_cone
+
+            return distance_between_cone,vector_closest_cone.tolist()
         
         def calculate_distance_curve_point_pair(self,curve_point_pair):
         
@@ -643,7 +673,9 @@ class Sensor_Box(object):
                         sum_flattened_predict_curverature_gradient=np.abs(agent_imitation.predict_curverature_measured[-(i+1)]-\
                         agent_imitation.predict_curverature_measured[-(i+2)])+sum_flattened_predict_curverature_gradient
              
-                self.flattened_predict_curverature=sum_flattened_predict_curverature/(agent_controller.curverature_sample_step+self.curverature_flatten_grad*(1+sum_flattened_predict_curverature_gradient)**1)
+                self.flattened_predict_curverature=sum_flattened_predict_curverature/(agent_controller.curverature_sample_step+\
+                                                                                      self.curverature_flatten_grad*\
+                                                                                      (1+sum_flattened_predict_curverature_gradient)**1)
                 
                 if self.flattened_predict_curverature<self.curv_min:
                     
@@ -672,7 +704,9 @@ class Sensor_Box(object):
             speed_optic=0
             
         agent_imitation.optic_speed.append(speed_optic)
+        agent_imitation.speed_airsim.append(self.car_state.speed)
         self.velocity_2d_correction=[speed_optic,[self.car_state_message[0].x,self.car_state_message[0].y]]
+
         if create_lidar_message:
             
             self.pointcloud_message=lidar.get_lidar_data(self.car_state_message[5])

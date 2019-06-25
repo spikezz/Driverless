@@ -24,7 +24,7 @@ class Summary_Scope(object):
             self.fig.subplots_adjust(left=0.05, bottom=0.05, right=0.95, top=0.95) 
             plt.ion()
             
-    def __init__(self,plot_action=False,plot_speed=False,plote_cross_position=False,plot_time=False):
+    def __init__(self,plot_action=False,plot_speed=False,plote_cross_position=False,plot_time=False,plot_synchronization=False):
         
         if plot_action:
             self.action_ploter_origin=[None,None]
@@ -43,6 +43,10 @@ class Summary_Scope(object):
         if plot_time:
             
             self.time_ploter=self.Summary_Ploter(row=1, column=1)
+            
+        if plot_synchronization:
+            
+            self.synchronization_ploter=self.Summary_Ploter(row=1, column=1)
             
     def plot_summary(self,agent):
 
@@ -85,16 +89,14 @@ class Summary_Scope(object):
             #action origin
             self.action_ploter_origin[0].ax[0].clear()
             self.action_ploter_origin[0].ax[0].plot(agent.action_0_controller,'r',linewidth=0.5,label='action[0] controller')
-            self.action_ploter_origin[0].ax[0].plot(agent.action_0_imitation,'g',linewidth=0.5,label='action[0] imitation')
-#            self.action_ploter_origin[0].ax[0].plot(agent.diff_action_0,'b',linewidth=0.5,label='action[0] difference')
+            self.action_ploter_origin[0].ax[0].plot(agent.action_0_imitation,'g',linewidth=0.5,label='action[0] imitation',alpha=1)
             self.action_ploter_origin[0].ax[0].legend(loc='lower left')
             self.action_ploter_origin[0].ax[0].set_xlabel('steps')
             self.action_ploter_origin[0].ax[0].set_ylabel('throttle and brake')
             
             self.action_ploter_origin[1].ax[0].clear()
             self.action_ploter_origin[1].ax[0].plot(agent.action_1_controller,'r',linewidth=0.5,label='action[1] controller')
-            self.action_ploter_origin[1].ax[0].plot(agent.action_1_imitation,'g',linewidth=0.5,label='action[1] imitation')
-#            self.action_ploter_origin[1].ax[0].plot(agent.diff_action_1,'b',linewidth=0.5,label='action[1] difference')
+            self.action_ploter_origin[1].ax[0].plot(agent.action_1_imitation,'g',linewidth=0.5,label='action[1] imitation',alpha=1)
             self.action_ploter_origin[1].ax[0].legend(loc='lower left')
             self.action_ploter_origin[1].ax[0].set_xlabel('steps')
             self.action_ploter_origin[1].ax[0].set_ylabel('steering')        
@@ -142,3 +144,18 @@ class Summary_Scope(object):
             self.time_ploter.fig = plt.gcf() 
             self.time_ploter.fig.canvas.draw() 
             self.time_ploter.fig.canvas.flush_events() 
+            
+        #synchronization
+        if hasattr(self, 'synchronization_ploter'):
+                
+            self.synchronization_ploter.ax[0].clear()
+            self.synchronization_ploter.ax[0].plot(agent.speed_rate,'r',linewidth=0.5,label='speed_rate')
+            self.synchronization_ploter.ax[0].plot(agent.speed_airsim,'g',linewidth=0.5,label='speed_airsim')
+            self.synchronization_ploter.ax[0].plot(agent.speed_measurement,'b',linewidth=0.5,label='speed_measurement')
+            self.synchronization_ploter.ax[0].legend(loc='lower left')
+            self.synchronization_ploter.ax[0].set_xlabel('steps')
+            self.synchronization_ploter.ax[0].set_ylabel('speed_rate s')
+            
+            self.synchronization_ploter.fig = plt.gcf() 
+            self.synchronization_ploter.fig.canvas.draw() 
+            self.synchronization_ploter.fig.canvas.flush_events() 

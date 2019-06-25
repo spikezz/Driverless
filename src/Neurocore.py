@@ -18,7 +18,7 @@ tf.set_random_seed(1)
 
 class Actor_Imitation(object):
     
-    def __init__(self,agent,input_dim,action_dim,sess,action_boundary,lr_i):
+    def __init__(self,agent,input_dim,action_dim,sess,action_boundary,lr_i,training_phase=False):
         
         with tf.name_scope('State_Imitation_Old'):
             
@@ -48,7 +48,7 @@ class Actor_Imitation(object):
         with tf.variable_scope('actor_imitation'):
             
             self.a = self._build_net(agent,self.S,dropout_rate=0.05, batch_normalization=False,summeraize_parameter=False,\
-                                     summeraize_output=False, trainable=True)
+                                     summeraize_output=True, trainable=True,training_phase=training_phase)
             
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='actor_imitation')
             
@@ -61,20 +61,13 @@ class Actor_Imitation(object):
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             print(update_ops)
             with tf.control_dependencies(update_ops):
-                
-#                self.train_imitation=tf.train.MomentumOptimizer(self.lr_i,self.momentum) .minimize(self.loss_imitation) 
+
                 self.opt_i = tf.train.AdamOptimizer(self.lr_i)
 #                self.opt_i = tf.train.MomentumOptimizer(self.lr_i,self.momentum)  
                 self.i_grads = tf.gradients(ys=self.loss_imitation, xs=self.e_params, grad_ys=None)
                 self.i_grads_filter=[]
                 self.e_params_filter=[]
-#                print('self.i_grads:',self.i_grads)
-#                print('i_grads length:',len(self.i_grads))
-#                print('self.e_params:',self.e_params)
-#                print('e_params length:',len(self.e_params))
-                
-
-#                self.P_i_grads=tf.Print(self.i_grads,self.i_grads,message='self.i_grads:',summarize=1024)
+#              
                 
                 for i in range(0,len(self.i_grads)):
                     
@@ -88,25 +81,33 @@ class Actor_Imitation(object):
                 self.train_imitation=self.opt_i.apply_gradients(zip(self.i_grads,self.e_params))
 #                self.train_imitation=self.opt_i.apply_gradients(zip(self.i_grads_filter,self.e_params_filter))
 
-           
-#            if layer_idx==0:
-#                
-#                layer_input_normalization=tf.layers.batch_normalization(layer_input,name=layer_normalizer_scope, training=True) 
-#                self.P_layer_input_normalizations=tf.Print(layer_input_normalization,[layer_input_normalization,layer_input],message='self.P_layer_input_normalizations:',summarize=1024)
-#         
-#            if layer_idx==0:
-#                
-#                layer_output = tf.nn.leaky_relu(tf.matmul(layer_input_normalization, w_collection) + b_collection)
-#                
-#            else:
-#                
-#                layer_output = tf.nn.leaky_relu(tf.matmul(layer_input, w_collection) + b_collection)
-#            
-#            layer_output_dropout = tf.nn.dropout(layer_output,rate=dropout_rate) 
+      
 
+    def _build_BN_layer(self,layer_input,layer_normalizer_scope,moving_decay=0.9,eps=1e-16,training_phase=0,trainable=True):
+        
+        with tf.variable_scope(layer_normalizer_scope):
+            
+            gamma = tf.get_variable('gamma',shape=[layer_input.shape[-1]],initializer=tf.constant_initializer(1),trainable=trainable)
+            beta  = tf.get_variable('beat', shape=[layer_input.shape[-1]],initializer=tf.constant_initializer(0),trainable=trainable)
+            
+            axises = list(range(len(layer_input.shape)-1))
+            batch_mean, batch_var = tf.nn.moments(layer_input,axises, name='moments')
+            ema = tf.train.ExponentialMovingAverage(moving_decay)   
+            
+            def mean_var_with_update():
+                
+                ema_apply_op = ema.apply([batch_mean,batch_var])
+                
+                with tf.control_dependencies([ema_apply_op]):
+                    
+                    return tf.identity(batch_mean), tf.identity(batch_var)
+
+            mean, var = tf.cond(tf.equal(training_phase,0),mean_var_with_update,lambda:(ema.average(batch_mean),ema.average(batch_var)))
+
+        return tf.nn.batch_normalization(layer_input,mean,var,beta,gamma,eps)
     
-    def _build_layer(self,agent, layer_input_dim, hidden_neuro_dim, layer_input,layer_idx,initializer_w,initializer_b, dropout_rate=0, \
-                    batch_normalization=False,summeraize_parameter=False, summeraize_output=False, trainable=None): 
+    def _build_layer(self,agent, layer_input_dim, hidden_neuro_dim, layer_input,layer_idx,initializer_w,initializer_b, dropout_rate=0,\
+                    batch_normalization=False,summeraize_parameter=False, summeraize_output=False, trainable=None,training_phase=0): 
         
         layer_scope = 'layer_%d'%(layer_idx+1)
         weight_scope = 'weight_actor_layer%d'%(layer_idx+1)
@@ -115,7 +116,6 @@ class Actor_Imitation(object):
         layer_bias_histogram_scope='hist_bias_actor_layer%d'%(layer_idx+1)   
         layer_normalizer_scope='normalizer_actor_layer%d'%(layer_idx+1)  
         layer_output_scope='output_actor_layer%d'%(layer_idx+1)
-#        layer_input_scope='input_actor_layer%d'%(layer_idx+1)
         
         with tf.variable_scope(layer_scope):
             
@@ -128,31 +128,12 @@ class Actor_Imitation(object):
                 agent.summary_set.append(l_w_hist)
                 l_b_hist=tf.summary.histogram(layer_bias_histogram_scope,b_collection)
                 agent.summary_set.append(l_b_hist) 
-
-#            if layer_idx==0:
-#                
-#                layer_input_n=tf.layers.batch_normalization(layer_input,name=layer_normalizer_scope, training=True) 
-##                input_batch_normalization=tf.keras.layers.BatchNormalization(name=layer_normalizer_scope)
-##                layer_input=input_batch_normalization(layer_input,training=True)
-##                tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, input_batch_normalization.updates)
-#                layer_input_P= tf.Print(layer_input_n,[layer_input_n,layer_input],message='layer_input_P:',summarize=1024)
-#                layer_output_0 = tf.matmul(layer_input_P, w_collection) + b_collection
-#                
-#            else:
-#                
-#                layer_output_0 = tf.matmul(layer_input, w_collection) + b_collection
-                
+           
             layer_output_0 = tf.matmul(layer_input, w_collection) + b_collection  
             
             if batch_normalization:
                 
-#                layer_input_normalization = tf.keras.layers.BatchNormalization()(layer_input, training=True)
-#                batch_normalization=tf.keras.layers.BatchNormalization(name=layer_normalizer_scope,trainable=True)
-#                layer_output_normalization=batch_normalization(layer_output_0,training=True)
-#                tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, batch_normalization.updates)
-                
-                layer_output_normalization=tf.layers.batch_normalization(layer_output_0,name=layer_normalizer_scope, training=True,trainable=True) 
-                
+                layer_output_normalization=self._build_BN_layer(layer_output_0,layer_normalizer_scope,trainable=True)
                 layer_output = tf.nn.leaky_relu(layer_output_normalization)
                 
             else:
@@ -170,7 +151,7 @@ class Actor_Imitation(object):
             return layer_output_dropout
         
     def _build_net(self, agent,s, dropout_rate=0,batch_normalization=False, summeraize_parameter=False,\
-                   summeraize_output=False, trainable=False):
+                   summeraize_output=False, trainable=False,training_phase=0):
     
         init_w = tf.keras.initializers.glorot_normal(seed=tf_seed)
         init_b = tf.keras.initializers.glorot_normal(seed=tf_seed)
@@ -178,12 +159,12 @@ class Actor_Imitation(object):
         layer=[None]*(self.number_of_hidden_layers)
         
         layer[0]=self._build_layer(agent,self.state_dimension,self.H_a[0], s, 0, init_w, init_b, dropout_rate=dropout_rate,\
-             batch_normalization=batch_normalization,summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
+             batch_normalization=batch_normalization,summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable,training_phase=training_phase)
 
         for i in range(1,self.number_of_hidden_layers):
             
             layer[i]=self._build_layer(agent,self.H_a[i-1],self.H_a[i], layer[i-1], i, init_w, init_b, dropout_rate=dropout_rate,\
-                 batch_normalization=batch_normalization,summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable)
+                 batch_normalization=batch_normalization,summeraize_parameter=summeraize_parameter,summeraize_output=summeraize_output,trainable=trainable,training_phase=training_phase)
         
         with tf.variable_scope('action'):
             
@@ -210,7 +191,6 @@ class Actor_Imitation(object):
     def learn_Imitation(self, s ,a_c):   
         
         self.sess.run(self.train_imitation, feed_dict={self.S: s,self.A_C:a_c})
-#        self.sess.run(self.P_i_grads, feed_dict={self.S: s,self.A_C:a_c})
 
     def choose_action(self, s):
         

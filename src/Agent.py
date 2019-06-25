@@ -17,8 +17,8 @@ from simple_pid import PID
 
 class Agent_Controller(object):
     
-    def __init__(self,action_dim,kp_speed,ki_speed,kd_speed,limits_speed,set_point_speed_min,\
-                 kp_steering,ki_steering,kd_steering,set_point_steering,limits_steering):
+    def __init__(self,action_dim,kp_speed,ki_speed,kd_speed,limits_speed,set_point_speed_min,set_point_speed_max,\
+                 kp_steering,ki_steering,kd_steering,set_point_steering,limits_steering,pid_tuning=False):
         
         ##dimension of action
         self.action_dim = 2
@@ -26,14 +26,23 @@ class Agent_Controller(object):
         self.action_old=np.zeros(self.action_dim)
         self.state_idx=0
         self.recorder_switch=0
-        self.predict_step_angle=3
+        self.predict_step_angle=2
         self.predict_step=12
         self.curverature_sample_step=6
-        self.open_control_rate=0.4
+        self.open_control_rate=0.54
         self.close_control_rate=1-self.open_control_rate
-        self.set_point_speed=set_point_speed_min
-        self.set_point_speed_step=0.2
+        self.set_point_speed_step=0.3
         self.set_point_speed_min=set_point_speed_min
+        self.set_point_speed_max=set_point_speed_max
+        
+        if pid_tuning:
+            
+            self.set_point_speed=20
+        
+        else:
+            
+            self.set_point_speed=set_point_speed_min
+            
         self.set_point_steering=set_point_steering
         self.kp_speed=kp_speed
         self.ki_speed=ki_speed
@@ -46,28 +55,88 @@ class Agent_Controller(object):
         self.speed_controller=PID(Kp=kp_speed, Ki=ki_speed, Kd=kd_speed,setpoint=self.set_point_speed,output_limits=limits_speed)
         self.steering_controller=PID(Kp=kp_steering, Ki=ki_steering, Kd=kd_steering,setpoint=self.set_point_steering,output_limits=limits_steering)
     
-    def update_setpoint_speed(self,curverature_meter,agent_imitation,sensor):
+    def drive(self,car_controls,agent_i,curverature_meter,sensor, sensor_visualizer,elapsed_time_entire,imitation_drive=False,pid_tuning=False):
+        
+        self.update_setpoint_speed(curverature_meter,agent_i,sensor,elapsed_time_entire,pid_tuning=False)
+        self.action[0]=self.speed_controller(sensor.car_state.speed)
+ 
+        if self.action[0]>=0:
+        
+            if not imitation_drive:
+            
+                car_controls.throttle=float(self.action[0])
+                car_controls.brake=0
+            
+            agent_i.throttle_controller.append(float(self.action[0]))
+            agent_i.brake_controller.append(0)
+            
+        else:
+            
+            if not imitation_drive:
+                
+                car_controls.brake=float(-self.action[0])
+                car_controls.throttle=0
+                
+            agent_i.throttle_controller.append(float(-self.action[0]))
+            agent_i.brake_controller.append(0)
+            
+        if pid_tuning:#
+
+            self.action[1]=(self.steering_controller(sensor_visualizer.mittle_position)/((self.set_point_speed)**1))*self.close_control_rate
+                    
+        else:
+            
+            self.action[1]=sensor_visualizer.predict_angle_difference/34*self.open_control_rate+\
+            (self.steering_controller(sensor_visualizer.mittle_position)/((self.set_point_speed)**1))*self.close_control_rate
+            
+        if not imitation_drive:
+
+            car_controls.steering=self.action[1]
+        
+        agent_i.steering_angle_controller.append(self.action[1])
+        
+        agent_i.action_0_controller.append(self.action[0])
+        agent_i.action_1_controller.append(self.action[1])
+                
+    def update_setpoint_speed(self,curverature_meter,agent_imitation,sensor,elapsed_time_entire,pid_tuning=False):
         
         if hasattr(curverature_meter, 'flattened_predict_curverature'):
+            
+            if pid_tuning:
+                
+                self.set_point_speed=20
+           
+                if elapsed_time_entire>40:
+                    
+                    self.set_point_speed=self.set_point_speed_min
+                    
+                self.speed_controller.setpoint=self.set_point_speed
+                
+            else:
+                
+                self.set_point_speed_end=math.exp(6.0899-curverature_meter.flattened_predict_curverature)-425.3150
+                
+                if np.abs(self.set_point_speed-self.set_point_speed_end)<=self.set_point_speed_step or (self.set_point_speed>self.set_point_speed_end):
+                    
+                    self.set_point_speed=self.set_point_speed_end
+                    
+                elif self.set_point_speed<self.set_point_speed_end:
+                    
+                    self.set_point_speed=self.set_point_speed+self.set_point_speed_step
+                
+                if self.set_point_speed<self.set_point_speed_min:
+                    
+                    self.set_point_speed=self.set_point_speed_min 
+                                
+                if self.set_point_speed>self.set_point_speed_max:
+                    
+                    self.set_point_speed=self.set_point_speed_max 
+                
+                self.speed_controller.setpoint=self.set_point_speed
 
-            self.set_point_speed_end=math.exp(5.9-curverature_meter.flattened_predict_curverature)-349
-            
-            if np.abs(self.set_point_speed-self.set_point_speed_end)<=self.set_point_speed_step or (self.set_point_speed>self.set_point_speed_end):
-                
-                self.set_point_speed=self.set_point_speed_end
-                
-            elif self.set_point_speed<self.set_point_speed_end:
-                
-                self.set_point_speed=self.set_point_speed+self.set_point_speed_step
-            
-            if self.set_point_speed<self.set_point_speed_min:
-                
-                self.set_point_speed=self.set_point_speed_min 
-            
-            self.speed_controller.setpoint=self.set_point_speed
             agent_imitation.speed.append(sensor.car_state.speed)
-            agent_imitation.set_point_speed.append(self.set_point_speed)
-            
+            agent_imitation.set_point_speed.append(self.speed_controller.setpoint)
+           
     def reset(self,client,car_controls):
         
         car_controls.throttle=0
@@ -80,7 +149,7 @@ class Agent_Controller(object):
         
 class Agent_Imitation(object):
     
-    def __init__(self,input_dim,action_dim,sess):
+    def __init__(self,input_dim,action_dim,sess,training_phase=0):
         
         #session
         self.sess=sess
@@ -103,7 +172,7 @@ class Agent_Imitation(object):
         #action of Agent
         self.action=np.zeros(self.action_dim)
         #copy of action
-        self.action_old=np.zeros(self.action_dim)
+        self.action_old=np.zeros(self.input_dim)
         #inputs state of Agent
         self.observation=np.zeros(self.input_dim)
         #copy the state
@@ -112,10 +181,14 @@ class Agent_Imitation(object):
         self.writer = tf.summary.FileWriter("/home/spikezz/KaratUnreal/Clean Code/Driverless/src/logs")
         self.summary_set=[]
         #define neuro actor
-        self.actor=Neurocore.Actor_Imitation(self,input_dim,action_dim,sess,self.action_boundary,self.lr_i)
+        self.actor=Neurocore.Actor_Imitation(self,input_dim,action_dim,sess,self.action_boundary,self.lr_i,training_phase=training_phase)
         #data history:odm
         self.odm_msg=[]
         self.eul_msg=[]
+        #physic synchronization
+        self.speed_rate=[]
+        self.speed_airsim=[]
+        self.speed_measurement=[]
         #data history:steering
         self.steering_angle_controller=[]
         self.steering_angle_imitation=[]
@@ -128,10 +201,8 @@ class Agent_Imitation(object):
         #origin action
         self.action_0_controller=[]
         self.action_0_imitation=[]
-        self.diff_action_0=[]
         self.action_1_controller=[]
         self.action_1_imitation=[]
-        self.diff_action_1=[]
         #data history:speed
         self.speed=[]
         self.set_point_speed=[]
@@ -151,10 +222,42 @@ class Agent_Imitation(object):
         self.time_step_set=[]
         #create memory
         self.M=self.Memory(self.memory_capacity,self.memory_capacity_boundary,memory_dimension=input_dim + 2*action_dim)
+                
+    def imitate(self,car_controls,filtern=False,imitation_drive=False):
+        
+        self.action=self.actor.choose_action(self.observation_old)
+        
+        if self.action[0]>=0:
+                
+            if imitation_drive:
+                
+                car_controls.throttle=float(self.action[0])
+                car_controls.brake=0  
+                
+            self.throttle_imitation.append(float(self.action[0]))  
+            self.brake_imitation.append(0)
+            
+        elif self.action[0]<0:
+             
+            if imitation_drive:
+
+                car_controls.brake=float(-self.action[0])
+                car_controls.throttle=0
+                
+            self.brake_imitation.append(float(-self.action[0])) 
+            self.throttle_imitation.append(0)
+            
+        if imitation_drive:
+            
+            car_controls.steering=float(self.action[1])
+            
+        self.steering_angle_imitation.append(self.action[1])
+        self.action_0_imitation.append(self.action[0])
+        self.action_1_imitation.append(self.action[1])
         
     def update_observation(self,sensor,sensor_visualizer,car_controls):
         
-        observation_temp=[[],[],[],[],[],[],[]]
+        observation_temp=[[],[],[],[],[],[],[],[],[],[],[]]
         
         for i in range(0,len(sensor_visualizer.list_sensored_cone_covered_free)):
             
@@ -181,25 +284,11 @@ class Agent_Imitation(object):
             observation_temp[1]=np.vstack(observation_temp[1]).ravel()
         
         observation_temp[2]=np.vstack([sensor.car_state.speed/5]).ravel()
-#        observation_temp[3]=np.vstack([sensor.velocity_2d_correction[1][0]/5,sensor.velocity_2d_correction[1][1]/5]).ravel()
-#        observation_temp[4]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()
-#        observation_temp[5]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()
-#        observation_temp[6]=np.vstack([car_controls.steering*3]).ravel()
-#        
-#        observation_temp_pack=np.hstack((observation_temp[2],observation_temp[3],observation_temp[4],observation_temp[5],observation_temp[6]))  
-
         observation_temp[3]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()
         observation_temp[4]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()
         observation_temp[5]=np.vstack([car_controls.steering*3]).ravel()
-        
         observation_temp_pack=np.hstack((observation_temp[2],observation_temp[3],observation_temp[4],observation_temp[5]))  
-#        print('0',observation_temp[0])
-#        print('1',observation_temp[1])
-#        print('2',observation_temp[2])
-#        print('3',observation_temp[3])
-#        print('4',observation_temp[4])
-#        print('5',observation_temp[5])
-#        print('entire',observation_temp_pack)
+
         for t in range(0,len(observation_temp[0])):
             
             self.observation[t]=observation_temp[0][t]
@@ -230,6 +319,10 @@ class Agent_Imitation(object):
         #data history:odm
         self.odm_msg=[]
         self.eul_msg=[]
+        #physic synchronization
+        self.speed_rate=[]
+        self.speed_airsim=[]
+        self.speed_measurement=[]
         #data history:steering
         self.steering_angle_controller=[]
         self.steering_angle_imitation=[]
@@ -242,10 +335,8 @@ class Agent_Imitation(object):
         #origin action
         self.action_0_controller=[]
         self.action_0_imitation=[]
-        self.diff_action_0=[]
         self.action_1_controller=[]
         self.action_1_imitation=[]
-        self.diff_action_1=[]
         #data history:speed
         self.speed=[]
         self.set_point_speed=[]
@@ -263,18 +354,13 @@ class Agent_Imitation(object):
         #data history:time
         self.time_step_set_episode=[]
         self.time_step_set=[]
+        #create memory
         
     def merge_summary(self,actor,s,a_c,time_step):  
-        
-#        try:
-            
+
         self.merge = tf.summary.merge(self.summary_set)
         self.summary_agent=self.sess.run(self.merge,feed_dict={actor.S: s, actor.A_C:a_c})
         self.writer.add_summary(self.summary_agent,time_step)
-
-#        except:
-#            
-#            print("nothing is here")
 
     class Memory(object):
     
@@ -338,7 +424,27 @@ class Agent_Imitation(object):
             self.data[idxs, -agent.input_dim - 1]=punished_reward
         
             
-            
+                
+#    def filter_action(self):
+#        
+#        if len(self.action_0_controller)>self.fliter_grade:
+#                        
+#            sum_action=[self.action[0],self.action[1]]
+#            self.action_old=[]  
+#            
+#            for i in range(0,self.fliter_grade):
+#                        
+#                self.action_old.append([self.action_0_controller[-i-1],self.action_1_controller[-i-1]])
+#            
+#            for a in self.action_old:
+#                        
+#                sum_action[0]=sum_action[0]+a[0]
+#                sum_action[1]=sum_action[1]+a[1] 
+#            
+#            self.action_filtered[0]=sum_action[0]/(1+self.fliter_grade)
+#            self.action_filtered[1]=sum_action[1]/(1+self.fliter_grade)
+#            self.action_0_filter.append(self.action_filtered[0])
+#            self.action_1_filter.append(self.action_filtered[1])
             
             
             
