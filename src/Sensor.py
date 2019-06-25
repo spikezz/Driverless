@@ -21,6 +21,24 @@ class Sensor_Box(object):
         
     class Sensor_Visualizer(object):
         
+        class Vector_Finder(object):
+            
+            def __init__(self,sensor_visualizer,cone_set,sensor):
+                
+                sensor_visualizer.list_yellow_cone_sensored_sita=sensor_visualizer.find_sensored_cone(cone_set.list_yellow_cone,sensor.car_state_message[5],sensor.car_state_message[6],color='y')
+                sensor_visualizer.list_blue_cone_sensored_sita= sensor_visualizer.find_sensored_cone(cone_set.list_blue_cone,sensor.car_state_message[5],sensor.car_state_message[6],color='b')
+                
+                sensor_visualizer.list_cone_sensored_sita=copy.deepcopy(sensor_visualizer.list_yellow_cone_sensored_sita)
+                sensor_visualizer.list_cone_sensored_sita=sensor_visualizer.list_cone_sensored_sita+sensor_visualizer.list_blue_cone_sensored_sita
+                sensor_visualizer.list_cone_sensored_sita=sorted(sensor_visualizer.list_cone_sensored_sita,key=lambda x:x[1])
+                
+                sensor_visualizer.list_sensored_cone_yellow_covered_free,sensor_visualizer.list_sensored_cone_blue_covered_free=sensor_visualizer.cover_cone(sensor_visualizer.list_cone_sensored_sita)
+                sensor_visualizer.list_sensored_cone_covered_free=sensor_visualizer.list_sensored_cone_yellow_covered_free+sensor_visualizer.list_sensored_cone_blue_covered_free
+                print('root',sensor_visualizer.list_sensored_cone_covered_free)
+   
+#                self.initial_root_vector=sensor_visualizer.
+                
+                
         class Top_View_Ploter(object):
         
             def __init__(self,xlim,ylim,fig_size):
@@ -113,7 +131,11 @@ class Sensor_Box(object):
             if draw_sight:
                 
                 self.lidar_top_view=self.Top_View_Ploter([-15,15],[-15,15],[6.4, 4.8])
-        
+                
+        def initialze_vector_root(self,cone_set,sensor):
+            
+            self.vf=self.Vector_Finder(self,cone_set,sensor)
+            
         def update(self,cone_set,sensor,agent_controller,agent_imitation,curverature_meter,draw_sight=False,first_person=False):
             
             self.list_yellow_cone_sensored_sita=self.find_sensored_cone(cone_set.list_yellow_cone,sensor.car_state_message[5],sensor.car_state_message[6],color='y')
@@ -125,7 +147,7 @@ class Sensor_Box(object):
             
             self.list_sensored_cone_yellow_covered_free,self.list_sensored_cone_blue_covered_free=self.cover_cone(self.list_cone_sensored_sita)
             self.list_sensored_cone_covered_free=self.list_sensored_cone_yellow_covered_free+self.list_sensored_cone_blue_covered_free
-            
+
             if len(self.list_sensored_cone_yellow_covered_free)==0:
                 
                 print("no yellow cone detected")
@@ -461,12 +483,12 @@ class Sensor_Box(object):
             self.lidar_top_view.draw_line([horizon_blue_cone_pair[0][2][1],horizon_blue_cone_pair[1][2][1]],\
                                           [horizon_blue_cone_pair[0][2][0],horizon_blue_cone_pair[1][2][0]],ploter,'y','$h_b$',10,3,None)
             
-#            #vector cone closest
-#            self.lidar_top_view.draw_line([closest_yellow_cone_pair[0][2][1],closest_yellow_cone_pair[1][2][1]],\
-#                                          [closest_yellow_cone_pair[0][2][0],closest_yellow_cone_pair[1][2][0]],ploter,'b','$c_y$',10,3,None)
-#            
-#            self.lidar_top_view.draw_line([closest_blue_cone_pair[0][2][1],closest_blue_cone_pair[1][2][1]],\
-#                                          [closest_blue_cone_pair[0][2][0],closest_blue_cone_pair[1][2][0]],ploter,'y','$c_b$',10,3,None)
+            #vector cone closest
+            self.lidar_top_view.draw_line([closest_yellow_cone_pair[0][2][1],closest_yellow_cone_pair[1][2][1]],\
+                                          [closest_yellow_cone_pair[0][2][0],closest_yellow_cone_pair[1][2][0]],ploter,'b','$c_y$',10,3,None)
+            
+            self.lidar_top_view.draw_line([closest_blue_cone_pair[0][2][1],closest_blue_cone_pair[1][2][1]],\
+                                          [closest_blue_cone_pair[0][2][0],closest_blue_cone_pair[1][2][0]],ploter,'y','$c_b$',10,3,None)
             #projection point
             self.lidar_top_view.draw_line([closest_yellow_curve_point_pair[0][1][1],closest_yellow_curve_point_pair[1][1][1]],\
                                           [closest_yellow_curve_point_pair[0][1][0], closest_yellow_curve_point_pair[1][1][0]],ploter,'b','o',5,3,None)

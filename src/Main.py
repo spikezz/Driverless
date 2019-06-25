@@ -58,10 +58,6 @@ if remote_control:
 
 rate = rospy.Rate(10)#*2.1
 
-lidar=Sensor.Sensor_Box.Real_Lidar(client)
-sensor=Sensor.Sensor_Box(client,ros_interface,initializer,lidar,episode_counter)
-sv=Sensor.Sensor_Box.Sensor_Visualizer(draw_sight=plote_animation)
-
 sess = tf.Session()
 
 learning_phase=0
@@ -82,6 +78,10 @@ elif learning_phase==1:
     
     pass
 
+lidar=Sensor.Sensor_Box.Real_Lidar(client)
+sensor=Sensor.Sensor_Box(client,ros_interface,initializer,lidar,episode_counter)
+sv=Sensor.Sensor_Box.Sensor_Visualizer(draw_sight=plote_animation)
+
 cone_set=Enviroment.Cone_set(client,initializer,ros_interface,sv,agent_c,draw_map=plote_animation,loop_circuit=True)
 
 sess.run(tf.global_variables_initializer())
@@ -89,6 +89,9 @@ sess.run(tf.global_variables_initializer())
 cm=Sensor.Sensor_Box.Curverature_Meter()
 scope=Tools.Summary_Scope(plot_action=True,plot_speed=plote_scope,plote_cross_position=plote_scope,plot_time=plote_scope,\
                           plot_synchronization=plote_scope)
+
+sensor.update(client,ros_interface,initializer,lidar,agent_i,episode_counter,create_image_message=False,create_lidar_message=False)
+sv.initialze_vector_root(cone_set,sensor)
 
 time_stamp_entire= time.time()
 
