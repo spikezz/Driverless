@@ -30,6 +30,7 @@ class Agent_Controller(object):
         self.predict_step=12
         self.curverature_sample_step=6
         self.open_control_rate=0.54
+#        self.open_control_rate=0.3
         self.close_control_rate=1-self.open_control_rate
         self.set_point_speed_step=0.3
         self.set_point_speed_min=set_point_speed_min
@@ -270,23 +271,19 @@ class Agent_Imitation(object):
             elif sensor_visualizer.list_sensored_cone_covered_free[i][3]=='b':
                 
                 observation_temp[1].append(input_cone_norm)
-                
-            else:
-                
-                print('cone cover function defekt!!!')
             
         if len(observation_temp[0])!=0:
             
             observation_temp[0]=np.vstack(observation_temp[0]).ravel()
-            
+        
         if len(observation_temp[1])!=0:
             
             observation_temp[1]=np.vstack(observation_temp[1]).ravel()
         
-        observation_temp[2]=np.vstack([sensor.car_state.speed/5]).ravel()
-        observation_temp[3]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()
-        observation_temp[4]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()
-        observation_temp[5]=np.vstack([car_controls.steering*3]).ravel()
+        observation_temp[2]=np.vstack([sensor.car_state.speed/5]).ravel()#speed
+        observation_temp[3]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()#angluar_velocity
+        observation_temp[4]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()#acceleration
+        observation_temp[5]=np.vstack([car_controls.steering*34/10]).ravel()#mechanical steering
         observation_temp_pack=np.hstack((observation_temp[2],observation_temp[3],observation_temp[4],observation_temp[5]))  
 
         for t in range(0,len(observation_temp[0])):
