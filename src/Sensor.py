@@ -47,12 +47,12 @@ class Sensor_Box(object):
                                
                 else:
                     
-                    self.root_horizon_yellow_cone_pair=self.find_horizon_cone_pair(sensor_visualizer.list_sensored_cone_yellow_covered_free)
-                    self.root_distance_between_horizon_yellow_cone,self.root_vector_horizon_yellow_cone=sensor_visualizer.calculate_distance_closest_cone_pair(self.root_horizon_yellow_cone_pair)
-                    
                     self.root_closest_yellow_cone_pair=self.find_closest_cone_pair(sensor_visualizer.list_sensored_cone_yellow_covered_free,sensor.car_state_message[6])
                     self.root_distance_between_yellow_cone,self.root_vector_closest_yellow_cone=sensor_visualizer.calculate_distance_closest_cone_pair(self.root_closest_yellow_cone_pair)
-                    
+                         
+                    self.root_horizon_yellow_cone_pair=self.find_horizon_cone_pair(sensor_visualizer.list_sensored_cone_yellow_covered_free,self.root_closest_yellow_cone_pair,self.root_vector_closest_yellow_cone)
+                    self.root_distance_between_horizon_yellow_cone,self.root_vector_horizon_yellow_cone=sensor_visualizer.calculate_distance_closest_cone_pair(self.root_horizon_yellow_cone_pair)
+                
                 if len(sensor_visualizer.list_sensored_cone_blue_covered_free)==0:
                     
                     print("no blue cone detected")
@@ -62,12 +62,12 @@ class Sensor_Box(object):
                     print("single blue cone")
                 
                 else:
-                           
-                    self.root_horizon_blue_cone_pair=self.find_horizon_cone_pair(sensor_visualizer.list_sensored_cone_blue_covered_free)
-                    self.root_distance_between_horizon_blue_cone,self.root_vector_horizon_blue_cone=sensor_visualizer.calculate_distance_closest_cone_pair(self.root_horizon_blue_cone_pair)
                     
                     self.root_closest_blue_cone_pair=self.find_closest_cone_pair(sensor_visualizer.list_sensored_cone_blue_covered_free,sensor.car_state_message[6])
                     self.root_distance_between_blue_cone,self.root_vector_closest_blue_cone=sensor_visualizer.calculate_distance_closest_cone_pair(self.root_closest_blue_cone_pair)
+            
+                    self.root_horizon_blue_cone_pair=self.find_horizon_cone_pair(sensor_visualizer.list_sensored_cone_blue_covered_free,self.root_closest_blue_cone_pair,self.root_vector_closest_blue_cone)
+                    self.root_distance_between_horizon_blue_cone,self.root_vector_horizon_blue_cone=sensor_visualizer.calculate_distance_closest_cone_pair(self.root_horizon_blue_cone_pair)
             
             def find_closest_cone_pair(self,list_cone,eul_msg):
         
@@ -91,11 +91,29 @@ class Sensor_Box(object):
                     print('root vector initial fault!!!',vector_cone_list_s[0][0])
                     assert False
             
-            def find_horizon_cone_pair(self,list_cone):
-            
-                list_cone_s=sorted(list_cone,key=lambda x:x[5])
-    
-                return [list_cone_s[0],list_cone_s[1]]
+            def find_horizon_cone_pair(self,list_cone,root_closest_cone_pair,root_vector_closest_cone):
+                
+                vector_horizen_list=[]
+                
+                for i in range (0,len(list_cone)):
+                    
+                    vector_horizen=np.array(list_cone[i][2])-np.array(root_closest_cone_pair[1][2])  
+                    if vector_horizen.all()!=0:
+                        
+                        sita_vector_horizen=Functions.calculate_sita_of_radius([0,0],vector_horizen.tolist())-Functions.calculate_sita_of_radius([0,0],root_vector_closest_cone)
+                        
+                        if np.abs(sita_vector_horizen)>180:
+                            
+                            sita_vector_horizen=360-np.abs(sita_vector_horizen)
+                        vector_horizen_list.append([np.abs(sita_vector_horizen),i])
+                        print('vector_horizen',vector_horizen,i)
+                        print('sita_vector_horizen',sita_vector_horizen)
+                    
+                vector_horizen_list_sorted=sorted(vector_horizen_list,key=lambda x:x[0])
+                print('vector_horizen_list_sorted',vector_horizen_list_sorted)
+                print('idx',vector_horizen_list_sorted[0][1])
+                
+                return [root_closest_cone_pair[1],list_cone[vector_horizen_list_sorted[0][1]]]
             
             def update_root_vector(self):
                 
@@ -144,7 +162,7 @@ class Sensor_Box(object):
                 point[1]=Functions.calculate_rotated_point(0,point[0],sita_of_curve_point_and_car)
  
             def rotate_sight(self,list_cone_sensored_sita,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,\
-                             horizon_blue_cone_pair,horizon_yellow_cone_pair,predict_yellow_curve_point_pair,predict_blue_curve_point_pair,\
+                             horizon_yellow_cone_pair,horizon_blue_cone_pair,predict_yellow_curve_point_pair,predict_blue_curve_point_pair,\
                              predict_yellow_curverature_point,predict_blue_curverature_point,velocity_2d_correction,vector_closest_yellow_cone,\
                              vector_closest_blue_cone,root_closest_yellow_cone_pair,root_closest_blue_cone_pair,eul_msg):
                 
@@ -190,14 +208,14 @@ class Sensor_Box(object):
             self.sensor_boundary=15
             
             self.cone_marker='^'
-            self.cone_wide=0.0001
+            self.cone_wide=0.2
             
             self.car_length=2.8
             self.track_width=4
             
-#            self.time_threshold_vector=65
-            self.paralell_threshold_vector=45
-            
+            self.time_threshold_vector=90
+            self.paralell_threshold_vector=55
+
             if draw_sight:
                 
                 self.lidar_top_view=self.Top_View_Ploter([-15,15],[-15,15],[6.4, 4.8])
@@ -224,29 +242,30 @@ class Sensor_Box(object):
                                                                                                       self.list_sensored_cone_blue_covered_free,\
                                                                                                       self.vf.root_vector_closest_yellow_cone,\
                                                                                                       self.vf.root_vector_closest_blue_cone)
+                if self.closest_yellow_cone_pair!=None and self.closest_blue_cone_pair!=None:
                 
-                self.distance_between_yellow_cone,self.vector_closest_yellow_cone=self.calculate_distance_closest_cone_pair(self.closest_yellow_cone_pair)
-                self.vector_closest_yellow_cone_rotate=[self.distance_between_yellow_cone,self.vector_closest_yellow_cone]
-                                
-                self.distance_between_blue_cone,self.vector_closest_blue_cone=self.calculate_distance_closest_cone_pair(self.closest_blue_cone_pair)
-                self.vector_closest_blue_cone_rotate=[self.distance_between_blue_cone,self.vector_closest_blue_cone]
+                    self.distance_between_yellow_cone,self.vector_closest_yellow_cone=self.calculate_distance_closest_cone_pair(self.closest_yellow_cone_pair)
+                    self.vector_closest_yellow_cone_rotate=[self.distance_between_yellow_cone,self.vector_closest_yellow_cone]
+                                    
+                    self.distance_between_blue_cone,self.vector_closest_blue_cone=self.calculate_distance_closest_cone_pair(self.closest_blue_cone_pair)
+                    self.vector_closest_blue_cone_rotate=[self.distance_between_blue_cone,self.vector_closest_blue_cone]
+                    
+                    self.vf.root_closest_yellow_cone_pair=copy.deepcopy(self.closest_yellow_cone_pair)
+                    self.vf.root_distance_between_yellow_cone=copy.deepcopy(self.distance_between_yellow_cone)
+                    self.vf.root_vector_closest_yellow_cone=copy.deepcopy(self.vector_closest_yellow_cone)
+                    
+                    self.vf.root_closest_blue_cone_pair=copy.deepcopy(self.closest_blue_cone_pair)
+                    self.vf.root_distance_between_blue_cone=copy.deepcopy(self.distance_between_blue_cone)
+                    self.vf.root_vector_closest_blue_cone=copy.deepcopy(self.vector_closest_blue_cone)
                 
-                self.vf.root_closest_yellow_cone_pair=copy.deepcopy(self.closest_yellow_cone_pair)
-                self.vf.root_distance_between_yellow_cone=copy.deepcopy(self.distance_between_yellow_cone)
-                self.vf.root_vector_closest_yellow_cone=copy.deepcopy(self.vector_closest_yellow_cone)
-                
-                self.vf.root_closest_blue_cone_pair=copy.deepcopy(self.closest_blue_cone_pair)
-                self.vf.root_distance_between_blue_cone=copy.deepcopy(self.distance_between_blue_cone)
-                self.vf.root_vector_closest_blue_cone=copy.deepcopy(self.vector_closest_blue_cone)
-                
-                self.horizon_yellow_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_yellow_covered_free)
-                self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone=self.calculate_distance_closest_cone_pair(self.horizon_yellow_cone_pair)
-                self.vector_horizon_yellow_cone_rotate=[self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone]
-                
-                self.horizon_blue_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_blue_covered_free)
-                self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone=self.calculate_distance_closest_cone_pair(self.horizon_blue_cone_pair)
-                self.vector_horizon_blue_cone_rotate=[self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone]
-                
+#                self.horizon_yellow_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_yellow_covered_free)
+#                self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone=self.calculate_distance_closest_cone_pair(self.horizon_yellow_cone_pair)
+#                self.vector_horizon_yellow_cone_rotate=[self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone]
+#                
+#                self.horizon_blue_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_blue_covered_free)
+#                self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone=self.calculate_distance_closest_cone_pair(self.horizon_blue_cone_pair)
+#                self.vector_horizon_blue_cone_rotate=[self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone]
+#                
             else:
                 
                 if len(self.list_sensored_cone_yellow_covered_free)==0:
@@ -260,10 +279,11 @@ class Sensor_Box(object):
                                
                 else:
                     
-                    self.horizon_yellow_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_yellow_covered_free)
-                    self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone=self.calculate_distance_closest_cone_pair(self.horizon_yellow_cone_pair)
-                    self.vector_horizon_yellow_cone_rotate=[self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone]
-                    
+                    pass
+#                    self.horizon_yellow_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_yellow_covered_free)
+#                    self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone=self.calculate_distance_closest_cone_pair(self.horizon_yellow_cone_pair)
+#                    self.vector_horizon_yellow_cone_rotate=[self.distance_between_horizon_yellow_cone,self.vector_horizon_yellow_cone]
+#                    
     #                self.closest_yellow_cone_pair=self.find_closest_cone_pair(self.list_sensored_cone_yellow_covered_free,self.vf.root_vector_closest_yellow_cone,\
     #                                                                          self.vf.root_closest_yellow_cone_pair)
     #                   
@@ -286,9 +306,10 @@ class Sensor_Box(object):
                 
                 else:
                     
-                    self.horizon_blue_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_blue_covered_free)
-                    self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone=self.calculate_distance_closest_cone_pair(self.horizon_blue_cone_pair)
-                    self.vector_horizon_blue_cone_rotate=[self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone]
+                    pass
+#                    self.horizon_blue_cone_pair=self.find_horizon_cone_pair(self.list_sensored_cone_blue_covered_free)
+#                    self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone=self.calculate_distance_closest_cone_pair(self.horizon_blue_cone_pair)
+#                    self.vector_horizon_blue_cone_rotate=[self.distance_between_horizon_blue_cone,self.vector_horizon_blue_cone]
                         
     #                self.closest_blue_cone_pair=self.find_closest_cone_pair(self.list_sensored_cone_blue_covered_free,self.vf.root_vector_closest_blue_cone,\
     #                                                                        self.vf.root_closest_blue_cone_pair)
@@ -365,7 +386,7 @@ class Sensor_Box(object):
                 if first_person:
                     
                     self.lidar_top_view.rotate_sight(self.list_cone_sensored_sita_s,self.closest_yellow_curve_point_pair,self.closest_blue_curve_point_pair,\
-                                                     self.horizon_blue_cone_pair,self.horizon_yellow_cone_pair,self.predict_yellow_curve_point_pair,\
+                                                     self.vf.root_horizon_yellow_cone_pair,self.vf.root_horizon_blue_cone_pair,self.predict_yellow_curve_point_pair,\
                                                      self.predict_blue_curve_point_pair,self.predict_yellow_curverature_point_c,self.predict_blue_curverature_point_c,\
                                                      sensor.velocity_2d_correction,self.vector_closest_yellow_cone_rotate,self.vector_closest_blue_cone_rotate,\
                                                      self.vf.root_closest_yellow_cone_pair,self.vf.root_closest_blue_cone_pair,sensor.car_state_message[6])  
@@ -386,8 +407,8 @@ class Sensor_Box(object):
             if draw_sight:
                     
                 x_rs,y_rs = Functions.calculate_circle(x_center_yellow,y_center_yellow,r_yellow)
-                self.plot_all(self.list_cone_sensored_sita_s,self.closest_yellow_cone_pair,self.closest_blue_cone_pair,self.horizon_yellow_cone_pair,\
-                              self.horizon_blue_cone_pair,self.closest_yellow_curve_point_pair,self.closest_blue_curve_point_pair,\
+                self.plot_all(self.list_cone_sensored_sita_s,self.closest_yellow_cone_pair,self.closest_blue_cone_pair,\
+                              self.closest_yellow_curve_point_pair,self.closest_blue_curve_point_pair,\
                               self.predict_yellow_curve_point_pair,self.predict_blue_curve_point_pair,\
                               self.predict_yellow_curverature_point_c,self.predict_blue_curverature_point_c,\
                               x_rs,y_rs,self.lidar_top_view,sensor,sensor.car_state_message[6],first_person)       
@@ -567,39 +588,10 @@ class Sensor_Box(object):
      
                 return [list_sorted_curve_point[0],list_sorted_curve_point[1]],[list_curve_point_predict[pa_idx_0],list_curve_point_predict[pa_idx_1]],\
                 list_curverature_predict_sorted
-                
-#        def find_closest_cone_pair(self,list_cone,root_vector_time,root_cone_pair):
-#        
-#            list_cone=sorted(list_cone,key=lambda x:x[0])
-#            vector_cone_list=[]
-#                
-#            for i in range(1,len(list_cone)):
-#                
-#                vector_cone=np.array(list_cone[i][2])-np.array(list_cone[0][2])   
-#                sita_vector_time=Functions.calculate_sita_of_radius([0,0],vector_cone.tolist())-Functions.calculate_sita_of_radius([0,0],root_vector_time)
-##                sita_vector_paralell=Functions.calculate_sita_of_radius([0,0],vector_cone.tolist())-Functions.calculate_sita_of_radius([0,0],root_vector_paralell)
-##                vector_cone_list.append([np.abs(sita_vector_time),np.abs(sita_vector_paralell),vector_cone,i])
-#                vector_cone_list.append([np.abs(sita_vector_time),vector_cone,i])
-#            vector_cone_time_list=sorted(vector_cone_list,key=lambda x:x[0])  
-##            vector_cone_paralell_list=sorted(vector_cone_list,key=lambda x:x[1])
-#                 
-##            if vector_cone_time_list[0][0]<self.time_threshold_vector and vector_cone_time_list[0][1]<self.paralell_threshold_vector:
-#            if vector_cone_time_list[0][0]<self.time_threshold_vector:
-#                
-##                return [list_cone[0],list_cone[vector_cone_time_list[0][3]]]
-#                return [list_cone[0],list_cone[vector_cone_time_list[0][2]]]
-#            
-#            else:
-#                
-#                print('vector finder defekt!')
-#                print('time judgment:',vector_cone_time_list[0][0]<self.time_threshold_vector,vector_cone_time_list[0][0])
-##                print('paralell judgment:',vector_cone_time_list[0][1]<self.paralell_threshold_vector,vector_cone_time_list[0][1])
-#                assert False
-#                return root_cone_pair
-                
+               
         def find_closest_cone_pair(self,list_sensored_cone_yellow_covered_free,list_sensored_cone_blue_covered_free,\
                                    root_vector_closest_yellow_cone,root_vector_closest_blue_cone):
-
+#            print('start')
             list_yellow_cone=sorted(list_sensored_cone_yellow_covered_free,key=lambda x:x[0])
             list_blue_cone=sorted(list_sensored_cone_blue_covered_free,key=lambda x:x[0])
             paralell_cone_pile=[]
@@ -610,32 +602,37 @@ class Sensor_Box(object):
                 
                 vector_yellow_cone=np.array(list_yellow_cone[i][2])-np.array(list_yellow_cone[0][2])   
                 sita_yellow_vector_time=Functions.calculate_sita_of_radius([0,0],vector_yellow_cone.tolist())-Functions.calculate_sita_of_radius([0,0],root_vector_closest_yellow_cone)
-                
+#                print('sita_yellow_vector_time',sita_yellow_vector_time,vector_yellow_cone,root_vector_closest_yellow_cone)
                 if np.abs(sita_yellow_vector_time)>180:
                     
                     sita_yellow_vector_time=360-np.abs(sita_yellow_vector_time)
                     
-                angle_yellow_cone_list.append([np.abs(sita_yellow_vector_time),i])
+                if np.abs(sita_yellow_vector_time)<self.time_threshold_vector:
+                    
+                    angle_yellow_cone_list.append([np.abs(sita_yellow_vector_time),i,vector_yellow_cone])
+                    
                 angle_blue_cone_list=[]
                 
                 for j in range(1,len(list_blue_cone)):
      
                     vector_blue_cone=np.array(list_blue_cone[j][2])-np.array(list_blue_cone[0][2])  
                     sita_blue_vector_time=Functions.calculate_sita_of_radius([0,0],vector_blue_cone.tolist())-Functions.calculate_sita_of_radius([0,0],root_vector_closest_blue_cone)
-                    
+#                    print('sita_blue_vector_time',sita_blue_vector_time,vector_blue_cone,root_vector_closest_blue_cone)
                     if np.abs(sita_blue_vector_time)>180:
                         
                         sita_blue_vector_time=360-np.abs(sita_blue_vector_time)
+                    
+                    if np.abs(sita_blue_vector_time)<self.time_threshold_vector:
                         
-                    angle_blue_cone_list.append([np.abs(sita_blue_vector_time),j])
+                        angle_blue_cone_list.append([np.abs(sita_blue_vector_time),j,vector_blue_cone])
                     
                     sita_vector_paralell=Functions.calculate_sita_of_radius([0,0],vector_blue_cone.tolist())-Functions.calculate_sita_of_radius([0,0],vector_yellow_cone.tolist())                
-                    
+#                    print('sita_vector_paralell',sita_vector_paralell)
                     if np.abs(sita_vector_paralell)>180:
                         
                         sita_vector_paralell=360-np.abs(sita_vector_paralell)
                     
-                    paralell_cone_pile.append([np.abs(sita_vector_paralell),i,j,vector_yellow_cone,vector_blue_cone])
+                    paralell_cone_pile.append([np.abs(sita_vector_paralell),i,j,sita_vector_paralell,vector_yellow_cone,vector_blue_cone])
  
             
             paralell_cone_pile_sorted=sorted(paralell_cone_pile,key=lambda x:x[0])
@@ -665,33 +662,59 @@ class Sensor_Box(object):
                               
                         if paralell_cone_pile_sorted[k][1]==angle_yellow_cone_list_sorted[i][1] and paralell_cone_pile_sorted[k][2]==angle_blue_cone_list_sorted[j][1]:
 #                            print('a1',paralell_cone_pile_sorted[k][0])
-                            if paralell_cone_pile_sorted[k][0]<self.paralell_threshold_vector:
+                            if paralell_cone_pile_sorted[k][0]<self.paralell_threshold_vector :
                                 pair_found=True
                                 break
                     if pair_found:
                         break
                 if pair_found:  
                     break
-#            print('ijk',i,j,k)
+
             if pair_found:
-#                
+                
 #                print('cy',angle_yellow_cone_list_sorted[i][1])
 #                print('cb',angle_blue_cone_list_sorted[j][1])
                 
                 return [list_yellow_cone[0],list_yellow_cone[angle_yellow_cone_list_sorted[i][1]]],[list_blue_cone[0],list_blue_cone[angle_blue_cone_list_sorted[j][1]]]
             
             else:
+#                print( 'ry',root_vector_closest_yellow_cone)
+#                print( 'rb',root_vector_closest_blue_cone)
+                return None,None
+#                assert False
+
+#        def find_horizon_cone_pair(self,list_cone,):
+#        
+#            list_cone=sorted(list_cone,key=lambda x:x[5])
+#
+#            return [list_cone[0],list_cone[1]]
+        
+        def find_horizon_cone_pair(self,list_cone,root_closest_cone_pair,root_vector_closest_cone):
                 
-                assert False
-
-        def find_horizon_cone_pair(self,list_cone,):
+            vector_horizen_list=[]
+            
+            for i in range (0,len(list_cone)):
+                
+                vector_horizen=np.array(list_cone[i][2])-np.array(root_closest_cone_pair[1][2])  
+                if vector_horizen.all()!=0:
+                    
+                    sita_vector_horizen=Functions.calculate_sita_of_radius([0,0],vector_horizen.tolist())-Functions.calculate_sita_of_radius([0,0],root_vector_closest_cone)
+                    
+                    if np.abs(sita_vector_horizen)>180:
+                        
+                        sita_vector_horizen=360-np.abs(sita_vector_horizen)
+                    vector_horizen_list.append([np.abs(sita_vector_horizen),i])
+#                    print('vector_horizen',vector_horizen,i)
+#                    print('sita_vector_horizen',sita_vector_horizen)
+                
+            vector_horizen_list_sorted=sorted(vector_horizen_list,key=lambda x:x[0])
+#            print('vector_horizen_list_sorted',vector_horizen_list_sorted)
+#            print('idx',vector_horizen_list_sorted[0][1])
+#            
+            return [root_closest_cone_pair[1],list_cone[vector_horizen_list_sorted[0][1]]]
         
-            list_cone=sorted(list_cone,key=lambda x:x[5])
-
-            return [list_cone[0],list_cone[1]]
-        
-        def plot_all(self,list_sensored_cone_sort_with_sita_covered,closest_yellow_cone_pair,closest_blue_cone_pair,horizon_yellow_cone_pair,\
-                     horizon_blue_cone_pair,closest_yellow_curve_point_pair,closest_blue_curve_point_pair,predict_yellow_curve_point_pair,\
+        def plot_all(self,list_sensored_cone_sort_with_sita_covered,closest_yellow_cone_pair,closest_blue_cone_pair,\
+                     closest_yellow_curve_point_pair,closest_blue_curve_point_pair,predict_yellow_curve_point_pair,\
                      predict_blue_curve_point_pair,predict_yellow_curverature_point,predict_blue_curverature_point,x_rs,y_rs,ploter,sensor,eul_msg,first_person):
         
             for i in range (len(list_sensored_cone_sort_with_sita_covered)):
@@ -699,14 +722,14 @@ class Sensor_Box(object):
                 self.lidar_top_view.draw_line([0,list_sensored_cone_sort_with_sita_covered[i][2][1]],\
                                 [0,list_sensored_cone_sort_with_sita_covered[i][2][0]],\
                                 ploter,list_sensored_cone_sort_with_sita_covered[i][3],list_sensored_cone_sort_with_sita_covered[i][4],10,0.5,None)
-            
-#            #vector cone horizon
-#            self.lidar_top_view.draw_line([horizon_yellow_cone_pair[0][2][1],horizon_yellow_cone_pair[1][2][1]],\
-#                                          [horizon_yellow_cone_pair[0][2][0],horizon_yellow_cone_pair[1][2][0]],ploter,'y','$h_y$',10,3,None)
 #            
-#            self.lidar_top_view.draw_line([horizon_blue_cone_pair[0][2][1],horizon_blue_cone_pair[1][2][1]],\
-#                                          [horizon_blue_cone_pair[0][2][0],horizon_blue_cone_pair[1][2][0]],ploter,'b','$h_b$',10,3,None)
-            
+#            #vector cone horizon
+#            self.lidar_top_view.draw_line([self.vf.root_horizon_yellow_cone_pair[0][2][1],self.vf.root_horizon_yellow_cone_pair[1][2][1]],\
+#                                          [self.vf.root_horizon_yellow_cone_pair[0][2][0],self.vf.root_horizon_yellow_cone_pair[1][2][0]],ploter,'y','$h_y$',10,3,None)
+#            
+#            self.lidar_top_view.draw_line([self.vf.root_horizon_blue_cone_pair[0][2][1],self.vf.root_horizon_blue_cone_pair[1][2][1]],\
+#                                          [self.vf.root_horizon_blue_cone_pair[0][2][0],self.vf.root_horizon_blue_cone_pair[1][2][0]],ploter,'b','$h_b$',10,3,None)
+#            
 ##            vector cone closest
 #            self.lidar_top_view.draw_line([closest_yellow_cone_pair[0][2][1],closest_yellow_cone_pair[1][2][1]],\
 #                                          [closest_yellow_cone_pair[0][2][0],closest_yellow_cone_pair[1][2][0]],ploter,'y','$c_y$',10,3,None)
