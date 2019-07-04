@@ -256,7 +256,7 @@ class Agent_Imitation(object):
         self.action_0_imitation.append(self.action[0])
         self.action_1_imitation.append(self.action[1])
         
-    def update_observation(self,sensor,sensor_visualizer,car_controls):
+    def update_observation(self,sensor,sensor_visualizer,car_controls,sensor_noise):
         
         observation_temp=[[],[],[],[],[],[],[],[],[],[],[]]
         
@@ -280,23 +280,54 @@ class Agent_Imitation(object):
             
             observation_temp[1]=np.vstack(observation_temp[1]).ravel()
         
-        observation_temp[2]=np.vstack([sensor.car_state.speed/5]).ravel()#speed
-        observation_temp[3]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()#angluar_velocity
-        observation_temp[4]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()#acceleration
-        observation_temp[5]=np.vstack([car_controls.steering*34/10]).ravel()#mechanical steering
-        observation_temp_pack=np.hstack((observation_temp[2],observation_temp[3],observation_temp[4],observation_temp[5]))  
+        if sensor_noise:
+ 
+            mu_speed, sigma_speed = 0, 0.07#sensor fault from datasheet   
+            delta_speed=np.random.normal(mu_speed, sigma_speed, 1)[0]
+            observation_temp[2]=np.vstack([(sensor.car_state.speed+delta_speed)/5]).ravel()#speed
+            
+            mu_angluar_velocity, sigma_angluar_velocity = 0, 0.000447968#sensor fault from datasheet
+            delta_angluar_velocity=np.random.normal(mu_angluar_velocity, sigma_angluar_velocity, 1)[0]
+            observation_temp[3]=np.vstack([(sensor.car_state_message[2].z+delta_angluar_velocity)/(2*math.pi)*36]).ravel()#angluar_velocity
+  
+            mu_acceleration, sigma_acceleration = 0, 0.0098#sensor fault from datasheet
+            delta_angluar_acceleration_x=np.random.normal(mu_acceleration, sigma_acceleration, 1)[0]
+            delta_angluar_acceleration_y=np.random.normal(mu_acceleration, sigma_acceleration, 1)[0]
+            observation_temp[4]=np.vstack([(sensor.car_state_message[3].x+delta_angluar_acceleration_x)/5,(sensor.car_state_message[3].y+\
+                                delta_angluar_acceleration_y)/5]).ravel()#acceleration
+            
+            mu_steering, sigma_steering = 0, 0.002585294#sensor fault from datasheet
+            delta_steering=np.random.normal(mu_steering, sigma_steering, 1)[0]
+            observation_temp[5]=np.vstack([(car_controls.steering+delta_steering)/(2*math.pi)*36]).ravel()#mechanical steering
+            
+        else:
+            
+            observation_temp[2]=np.vstack([sensor.car_state.speed/5]).ravel()#speed 
+            observation_temp[3]=np.vstack([sensor.car_state_message[2].z/(2*math.pi)*36]).ravel()#angluar_velocity
+            observation_temp[4]=np.vstack([sensor.car_state_message[3].x/5,sensor.car_state_message[3].y/5]).ravel()#acceleration
+            observation_temp[5]=np.vstack([car_controls.steering*34/10]).ravel()#mechanical steering
+            
+        observation_temp[6]=np.vstack([sensor_visualizer.vf.root_closest_yellow_cone_pair[0][2],sensor_visualizer.vf.root_closest_yellow_cone_pair[1][2]]).ravel()#yellow vector
+        observation_temp[7]=np.vstack([sensor_visualizer.vf.root_closest_blue_cone_pair[0][2],sensor_visualizer.vf.root_closest_blue_cone_pair[1][2]]).ravel()#blue vector
+        observation_temp[8]=np.vstack([sensor_visualizer.closest_yellow_cone[2],sensor_visualizer.closest_blue_cone[2]]).ravel()#closest cone
 
-        for t in range(0,len(observation_temp[0])):
-            
-            self.observation[t]=observation_temp[0][t]
+        observation_temp_pack=np.hstack((observation_temp[2],observation_temp[3],observation_temp[4],observation_temp[5],observation_temp[6],observation_temp[7],observation_temp[8]))  
+
+#        for t in range(0,len(observation_temp[0])):
+#            
+#            self.observation[t]=observation_temp[0][t]
+#        
+#        for t in range(20,20+len(observation_temp[1])):
+#            
+#            self.observation[t]=observation_temp[1][t-20]
+#        
+#        for t in range(40,40+len(observation_temp_pack)):
+#            
+#            self.observation[t]=observation_temp_pack[t-40]
         
-        for t in range(20,20+len(observation_temp[1])):
+        for t in range(0,len(observation_temp_pack)):
             
-            self.observation[t]=observation_temp[1][t-20]
-        
-        for t in range(40,40+len(observation_temp_pack)):
-            
-            self.observation[t]=observation_temp_pack[t-40]
+            self.observation[t]=observation_temp_pack[t]
             
     def sample_and_learn(self):
         

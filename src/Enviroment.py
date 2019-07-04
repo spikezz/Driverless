@@ -97,7 +97,6 @@ class Cone_set(object):
                 
                 yellow_cone=client.simGetObjectPosesWithTag('yellow_'+str(i))
                 
-            
             self.list_blue_cone.append(blue_cone[0])
             self.list_yellow_cone.append(yellow_cone[0])
             

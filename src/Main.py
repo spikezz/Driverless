@@ -28,11 +28,12 @@ pid_tuning=False
 plote_animation=True
 plote_scope=False
 remote_control=False
+sensor_noise=True
 summary=False
 summerize_loss=True
 training=0
 
-collision_distance=0.3
+collision_distance=0.7
 collision=False
 
 episode_counter=0
@@ -64,11 +65,11 @@ learning_phase=0
 
 if learning_phase==0:
     
-    agent_c=Agent.Agent_Controller(action_dim=2,kp_speed=0.45,ki_speed=0.00773,kd_speed=0.0766,limits_speed=(-1, 1),set_point_speed_min=5,set_point_speed_max=5,\
+    agent_c=Agent.Agent_Controller(action_dim=2,kp_speed=0.45,ki_speed=0.00773,kd_speed=0.0766,limits_speed=(-1, 1),set_point_speed_min=4,set_point_speed_max=12,\
                                    kp_steering=0.69,ki_steering=0,kd_steering=1.92,set_point_steering=0,limits_steering=(-1, 1),pid_tuning=pid_tuning)
-    agent_i=Agent.Agent_Imitation(input_dim=55,action_dim=2,sess=sess,training_phase=training)
+    agent_i=Agent.Agent_Imitation(input_dim=20,action_dim=2,sess=sess,training_phase=training)
     agent_i.writer.add_graph(sess.graph,episode_counter)
-    imitation_drive=False
+    imitation_drive=True
     distance=0
     speed_measurement=0
     agent_i.reset(client)
@@ -87,7 +88,7 @@ cone_set=Enviroment.Cone_set(client,initializer,ros_interface,sv,agent_c,draw_ma
 sess.run(tf.global_variables_initializer())
 
 cm=Sensor.Sensor_Box.Curverature_Meter()
-scope=Tools.Summary_Scope(plot_action=True,plot_speed=plote_scope,plote_cross_position=True,plot_time=plote_scope,\
+scope=Tools.Summary_Scope(plot_action=True,plot_speed=True,plote_cross_position=True,plot_time=plote_scope,\
                           plot_synchronization=plote_scope)
 
 sensor.update(client,ros_interface,initializer,lidar,agent_i,episode_counter,create_image_message=False,create_lidar_message=False)
@@ -124,7 +125,7 @@ while not rospy.is_shutdown():
                     agent_i.odm_msg.append(sensor.car_state_message[5])
                     agent_i.eul_msg.append(sensor.car_state_message[6])
                     
-                agent_i.update_observation(sensor,sv,car_controls)
+                agent_i.update_observation(sensor,sv,car_controls,sensor_noise)
          
         #        print('agent_i.observation',agent_i.observation)
                 
@@ -170,6 +171,8 @@ while not rospy.is_shutdown():
             time_stamp_entire= time.time()
             print('cur_min:%.10f cur_max:%.10f'%(cm.curv_min,cm.curv_max))
             print('episode_counter:',episode_counter)
+            sensor.update(client,ros_interface,initializer,lidar,agent_i,episode_counter,create_image_message=False,create_lidar_message=False)
+            sv.initialze_vector_root(cone_set,sensor)
             
             if episode_counter>agent_i.memory_capacity_boundary :
                 
