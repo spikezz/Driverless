@@ -140,7 +140,7 @@ further progress of Driverless Project
 
 <br />
 
-    4.Development of Path-planning algorithm with is robust against complex senario
+    4.Development of Path-planning algorithm which is robust against complex senario
 
 <br />
 
