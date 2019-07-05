@@ -33,7 +33,7 @@ summary=False
 summerize_loss=True
 training=0
 
-collision_distance=0.6
+collision_distance=0.5
 collision=False
 
 episode_counter=0

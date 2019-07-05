@@ -26,11 +26,11 @@ class Agent_Controller(object):
         self.action_old=np.zeros(self.action_dim)
         self.state_idx=0
         self.recorder_switch=0
-        self.predict_step_angle=2
+        self.predict_step_angle=3
         self.predict_step=12
         self.curverature_sample_step=6
         self.open_control_rate=0.54
-#        self.open_control_rate=0.3
+#        self.open_control_rate=0.9
         self.close_control_rate=1-self.open_control_rate
         self.set_point_speed_step=0.3
         self.set_point_speed_min=set_point_speed_min

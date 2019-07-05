@@ -205,14 +205,15 @@ class Sensor_Box(object):
             self.sensor_boundary=12
             
             self.cone_marker='^'
-            self.cone_wide=0.2
+            self.cone_wide=0.1
             
             self.car_length=2.8
             self.track_width=3
             
             self.time_threshold_vector=90
             self.paralell_threshold_vector=45
-
+            self.line_change_threshold=30
+            self.line_change_shift=0.3
             if draw_sight:
                 
                 self.lidar_top_view=self.Top_View_Ploter([-15,15],[-15,15],[6.4, 4.8])
@@ -279,7 +280,55 @@ class Sensor_Box(object):
                         
                     self.closest_blue_cone=self.list_sensored_cone_blue_covered_free[0]
                     print("single blue cone")
+                    
+#            sita_vector_yellow=Functions.calculate_sita_of_radius([0,0],self.vf.root_vector_closest_yellow_cone)-math.degrees(sensor.car_state_message[6].z)
+#            
+#            if sita_vector_yellow<-180:
+#                
+#                sita_vector_yellow=sita_vector_yellow+360
+#                
+#            elif sita_vector_yellow>180:
+#                
+#                sita_vector_yellow=sita_vector_yellow-360
+#                
+#            sita_vector_blue=Functions.calculate_sita_of_radius([0,0],self.vf.root_vector_closest_blue_cone)-math.degrees(sensor.car_state_message[6].z)
+#            
+#            if sita_vector_blue<-180:
+#                
+#                sita_vector_blue=sita_vector_blue+360
+#                
+#            elif sita_vector_blue>180:
+#                
+#                sita_vector_blue=sita_vector_blue-360
+#            
+#            sita_vector_mittle=(sita_vector_yellow+sita_vector_blue)/2
+#      
+#            print('sita_vector',sita_vector_mittle,sita_vector_yellow,sita_vector_blue)
+#            
+#            if sita_vector_mittle>self.line_change_threshold:
+#            
+#                agent_controller.set_point_steering=self.line_change_shift
+#                agent_controller.steering_controller.setpoint=agent_controller.set_point_steering
+#                
+#            elif sita_vector_mittle<-self.line_change_threshold:
+#                
+#                agent_controller.set_point_steering=-self.line_change_shift
+#                agent_controller.steering_controller.setpoint=agent_controller.set_point_steering
+#                
+#            else:
+#                
+#                agent_controller.set_point_steering=0
+#                agent_controller.steering_controller.setpoint=agent_controller.set_point_steering
+            random_filter_predict_step_angle=random.random()
             
+            if random_filter_predict_step_angle>0.5:
+                
+                agent_controller.predict_step_angle=3
+                
+            else:
+                
+                agent_controller.predict_step_angle=2
+                
             self.closest_yellow_curve_point_pair,self.predict_yellow_curve_point_pair,self.predict_yellow_curverature_point=\
             self.find_closest_curve_point_pair(cone_set.yellow_cone_spline,sensor.car_state_message[5],agent_controller.predict_step,\
                                                agent_controller.curverature_sample_step,agent_controller.predict_step_angle)
@@ -327,6 +376,7 @@ class Sensor_Box(object):
                     self.sin_projection_yellow=self.sin_projection_yellow*(-1)
                     
                 self.mittle_position=self.sin_projection_blue-self.track_width/2
+                
 #                print("sin_projection_yellow:%.2f \t sin_projection_blue:%.2f"%(self.sin_projection_yellow,self.sin_projection_blue))
 #                print("sin_projection difference:%.2f"%(self.sin_projection_difference))
                
@@ -365,12 +415,13 @@ class Sensor_Box(object):
             
             if draw_sight:
                     
-                x_rs,y_rs = Functions.calculate_circle(x_center_yellow,y_center_yellow,r_yellow)
+                x_rs_y,y_rs_y = Functions.calculate_circle(x_center_yellow,y_center_yellow,r_yellow)
+                x_rs_b,y_rs_b = Functions.calculate_circle(x_center_blue,y_center_blue,r_blue)
                 self.plot_all(self.list_cone_sensored_sita_s,self.closest_yellow_cone_pair,self.closest_blue_cone_pair,\
                               self.closest_yellow_curve_point_pair,self.closest_blue_curve_point_pair,\
                               self.predict_yellow_curve_point_pair,self.predict_blue_curve_point_pair,\
                               self.predict_yellow_curverature_point_c,self.predict_blue_curverature_point_c,\
-                              x_rs,y_rs,self.lidar_top_view,sensor,sensor.car_state_message[6],first_person)       
+                              x_rs_y,y_rs_y,x_rs_b,y_rs_b,self.lidar_top_view,sensor,sensor.car_state_message[6],first_person)       
             
         def cover_cone(self,list_sensored_cone_sort_with_sita):
         
@@ -435,7 +486,7 @@ class Sensor_Box(object):
             list_sensored_cone=[]
             
             for c in range(len(list_cone)):   
-                mu_position, sigma_position = 0, 0.0
+                mu_position, sigma_position = 0, 0.1
                 delta_position_x=np.random.normal(mu_position, sigma_position, 1)[0]
                 delta_position_y=np.random.normal(mu_position, sigma_position, 1)[0]
 
@@ -596,8 +647,7 @@ class Sensor_Box(object):
                     
                     paralell_cone_pile.append([np.abs(sita_vector_paralell),i,j,sita_vector_paralell,np.abs(sita_yellow_vector_time)+np.abs(sita_blue_vector_time),\
                                                vector_yellow_cone,vector_blue_cone])
- 
-            
+       
             paralell_cone_pile_sorted=sorted(paralell_cone_pile,key=lambda x:x[0])
             angle_yellow_cone_list_sorted=sorted(angle_yellow_cone_list,key=lambda x:x[0])
             angle_blue_cone_list_sorted=sorted(angle_blue_cone_list,key=lambda x:x[0])
@@ -685,7 +735,7 @@ class Sensor_Box(object):
         
         def plot_all(self,list_sensored_cone_sort_with_sita_covered,closest_yellow_cone_pair,closest_blue_cone_pair,\
                      closest_yellow_curve_point_pair,closest_blue_curve_point_pair,predict_yellow_curve_point_pair,\
-                     predict_blue_curve_point_pair,predict_yellow_curverature_point,predict_blue_curverature_point,x_rs,y_rs,ploter,sensor,eul_msg,first_person):
+                     predict_blue_curve_point_pair,predict_yellow_curverature_point,predict_blue_curverature_point,x_rs_y,y_rs_y,x_rs_b,y_rs_b,ploter,sensor,eul_msg,first_person):
 #        
             for i in range (len(list_sensored_cone_sort_with_sita_covered)):
                 
@@ -727,8 +777,9 @@ class Sensor_Box(object):
                                           [predict_blue_curve_point_pair[0][1][0],predict_blue_curve_point_pair[1][1][0]],ploter,'y','o',5,3,None)
                         
             #curverature circle
-            self.lidar_top_view.draw_line(x_rs,y_rs,ploter,'r','o',0,1,None)
-                    
+            self.lidar_top_view.draw_line(x_rs_y,y_rs_y,ploter,'y','o',0,1,None)
+            self.lidar_top_view.draw_line(x_rs_b,y_rs_b,ploter,'b','o',0,1,None)
+            
             for p in range(0,len(predict_yellow_curverature_point)):
                 
                 self.lidar_top_view.draw_line([predict_yellow_curverature_point[p][1][1],predict_yellow_curverature_point[p][1][1]],\

@@ -108,7 +108,7 @@ class Summary_Scope(object):
             self.speed_ploter.ax[0].clear()
             self.speed_ploter.ax[0].plot(agent.speed,'r',linewidth=0.5,label='speed')
             self.speed_ploter.ax[0].plot(agent.set_point_speed,'g',linewidth=0.5,label='speed setpoint')
-            self.speed_ploter.ax[0].plot(agent.optic_speed,'b',linewidth=0.5,label='optic speed')
+#            self.speed_ploter.ax[0].plot(agent.optic_speed,'b',linewidth=0.5,label='optic speed')
             self.speed_ploter.ax[0].legend(loc='lower left')
             self.speed_ploter.ax[0].set_xlabel('steps')
             self.speed_ploter.ax[0].set_ylabel('speed m/s')
