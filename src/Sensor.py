@@ -208,7 +208,7 @@ class Sensor_Box(object):
             self.cone_wide=0.2
             
             self.car_length=2.8
-            self.track_width=4
+            self.track_width=3
             
             self.time_threshold_vector=90
             self.paralell_threshold_vector=45
@@ -435,7 +435,7 @@ class Sensor_Box(object):
             list_sensored_cone=[]
             
             for c in range(len(list_cone)):   
-                mu_position, sigma_position = 0, 0.1
+                mu_position, sigma_position = 0, 0.0
                 delta_position_x=np.random.normal(mu_position, sigma_position, 1)[0]
                 delta_position_y=np.random.normal(mu_position, sigma_position, 1)[0]
 

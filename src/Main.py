@@ -33,7 +33,7 @@ summary=False
 summerize_loss=True
 training=0
 
-collision_distance=0.7
+collision_distance=0.6
 collision=False
 
 episode_counter=0
@@ -69,7 +69,7 @@ if learning_phase==0:
                                    kp_steering=0.69,ki_steering=0,kd_steering=1.92,set_point_steering=0,limits_steering=(-1, 1),pid_tuning=pid_tuning)
     agent_i=Agent.Agent_Imitation(input_dim=20,action_dim=2,sess=sess,training_phase=training)
     agent_i.writer.add_graph(sess.graph,episode_counter)
-    imitation_drive=True
+    imitation_drive=False
     distance=0
     speed_measurement=0
     agent_i.reset(client)
@@ -171,6 +171,7 @@ while not rospy.is_shutdown():
             time_stamp_entire= time.time()
             print('cur_min:%.10f cur_max:%.10f'%(cm.curv_min,cm.curv_max))
             print('episode_counter:',episode_counter)
+            print('elapsed_time_entire:',elapsed_time_entire)
             sensor.update(client,ros_interface,initializer,lidar,agent_i,episode_counter,create_image_message=False,create_lidar_message=False)
             sv.initialze_vector_root(cone_set,sensor)
             
@@ -184,9 +185,10 @@ while not rospy.is_shutdown():
 #        if episode_counter%16==0:
 #            
 #            scope.plot_summary(agent_i) 
-            
+
 #        ros_publisher['pub_odometry_auto'].publish(sensor.car_state_message[5])
         
+    ros_publisher['pub_action'].publish(action_message)  
     rate.sleep()
     elapsed_time_entire=time.time()-time_stamp_entire
     agent_i.time_step_set_episode.append(elapsed_time_entire)

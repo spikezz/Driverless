@@ -28,7 +28,8 @@ class Actor_Imitation(object):
             
             self.A_C = tf.placeholder(tf.float32, [None, action_dim], name='a_c')
             
-        self.H_a=[400,282,163,44]
+        self.H_a=[1600,1128,652,176]
+#        self.H_a=[400,282,163,44]
 #        self.H_a=[2780,2780]    
 #        self.H_a=[2780,1450,110]
 #        self.H_a=[1390,750,110]
@@ -48,7 +49,7 @@ class Actor_Imitation(object):
         
         with tf.variable_scope('actor_imitation'):
             
-            self.a = self._build_net(agent,self.S,dropout_rate=0.0, batch_normalization=False,summeraize_parameter=False,\
+            self.a = self._build_net(agent,self.S,dropout_rate=0.02, batch_normalization=False,summeraize_parameter=False,\
                                      summeraize_output=False, trainable=True,training_phase=training_phase)
             
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='actor_imitation')
@@ -63,8 +64,8 @@ class Actor_Imitation(object):
             print(update_ops)
             with tf.control_dependencies(update_ops):
 
-#                self.opt_i = tf.train.AdamOptimizer(self.lr_i)
-                self.opt_i = tf.train.MomentumOptimizer(self.lr_i,self.momentum)  
+                self.opt_i = tf.train.AdamOptimizer(self.lr_i)
+#                self.opt_i = tf.train.MomentumOptimizer(self.lr_i,self.momentum)  
                 self.i_grads = tf.gradients(ys=self.loss_imitation, xs=self.e_params, grad_ys=None)
                 self.i_grads_filter=[]
                 self.e_params_filter=[]

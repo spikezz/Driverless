@@ -161,13 +161,13 @@ class Agent_Imitation(object):
         #action limits
         self.action_boundary=np.array([1.0,1.0])
         # imitation learning rate for actor
-        self.lr_i = 6.25e-5
+        self.lr_i = 3.25e-5
         #initial memory capacity
         self.memory_capacity = 64
         #memory capacity upper bound
         self.memory_capacity_boundary = 16384
         #size of memory slice
-        self.memory_batch = 8
+        self.memory_batch = 16
         #load model
         self.load=False
         #action of Agent
