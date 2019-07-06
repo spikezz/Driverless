@@ -23,6 +23,7 @@ import numpy as np
 time.sleep(1)
 
 #switches
+imitation_learning=False
 model_data_recording=False
 pid_tuning=False
 loop_circuit=False
@@ -31,7 +32,7 @@ plote_scope=False
 remote_control=False
 sensor_noise=True
 load_model=True
-save_taining_parameter=False
+save_taining_parameter=True
 summary=False
 summerize_loss=True
 training=0
@@ -160,8 +161,10 @@ while not rospy.is_shutdown():
                     print('now:%.2f \t %.2f \t setpoint:%.2f'%(sv.closest_yellow_curve_point_pair[0][2],sv.closest_yellow_curve_point_pair[1][2],cone_set.start_point))
                     print('reset')
                     summary=True
-                
-                agent_i.sample_and_learn()
+                    
+                if imitation_learning:
+                    
+                    agent_i.sample_and_learn()
                 
             elif learning_phase==1:
                 

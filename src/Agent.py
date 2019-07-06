@@ -173,7 +173,8 @@ class Agent_Imitation(object):
                 imitation_actor_variable_list=[v for v in agent_imitation.actor.e_params]
                 variable_list_to_save.extend(imitation_actor_variable_list)      
                 self.saver=tf.train.Saver(var_list=variable_list_to_save,max_to_keep=1000)
-            
+                print('variable_list_to_save',variable_list_to_save)
+                
             if self.load:
                 
                 self.sess.run(tf.global_variables_initializer())
