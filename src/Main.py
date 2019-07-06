@@ -25,14 +25,17 @@ time.sleep(1)
 #switches
 model_data_recording=False
 pid_tuning=False
+loop_circuit=False
 plote_animation=True
 plote_scope=False
 remote_control=False
 sensor_noise=True
+load_model=True
+save_taining_parameter=False
 summary=False
 summerize_loss=True
 training=0
-
+reset_distance=3
 collision_distance=0.5
 collision=False
 
@@ -67,9 +70,10 @@ if learning_phase==0:
     
     agent_c=Agent.Agent_Controller(action_dim=2,kp_speed=0.45,ki_speed=0.00773,kd_speed=0.0766,limits_speed=(-1, 1),set_point_speed_min=4,set_point_speed_max=12,\
                                    kp_steering=0.69,ki_steering=0,kd_steering=1.92,set_point_steering=0,limits_steering=(-1, 1),pid_tuning=pid_tuning)
-    agent_i=Agent.Agent_Imitation(input_dim=20,action_dim=2,sess=sess,training_phase=training)
+    agent_i=Agent.Agent_Imitation(input_dim=20,action_dim=2,sess=sess,load=load_model,save_taining_parameter=save_taining_parameter,training_phase=training)
     agent_i.writer.add_graph(sess.graph,episode_counter)
-    imitation_drive=False
+    
+    imitation_drive=True
     distance=0
     speed_measurement=0
     agent_i.reset(client)
@@ -83,9 +87,9 @@ lidar=Sensor.Sensor_Box.Real_Lidar(client)
 sensor=Sensor.Sensor_Box(client,ros_interface,initializer,lidar,episode_counter)
 sv=Sensor.Sensor_Box.Sensor_Visualizer(draw_sight=plote_animation)
 
-cone_set=Enviroment.Cone_set(client,initializer,ros_interface,sv,agent_c,draw_map=plote_animation,loop_circuit=True)
+cone_set=Enviroment.Cone_set(client,initializer,ros_interface,sv,agent_c,draw_map=plote_animation,loop_circuit=loop_circuit)
 
-sess.run(tf.global_variables_initializer())
+#sess.run(tf.global_variables_initializer())
 
 cm=Sensor.Sensor_Box.Curverature_Meter()
 scope=Tools.Summary_Scope(plot_action=True,plot_speed=True,plote_cross_position=True,plot_time=plote_scope,\
@@ -133,7 +137,19 @@ while not rospy.is_shutdown():
                 
                     agent_i.M.store_transition(agent_i.observation_old,agent_i.action,agent_c.action)
                 
+                if not loop_circuit:
+                    
+                    reset_cone_distance=np.sqrt(pow((cone_set.coneback[0].position.x_val-sensor.car_state_message[5].pose.pose.position.x),2)+\
+                                                pow((cone_set.coneback[0].position.y_val-sensor.car_state_message[5].pose.pose.position.y),2)+\
+                                                pow((cone_set.coneback[0].position.z_val-sensor.car_state_message[5].pose.pose.position.z),2))
+                    
+                    if reset_cone_distance<reset_distance:
+                        
+                        print('reset cone!!!')
+                        summary=True
+                
                 if sv.sin_projection_yellow<collision_distance or sv.sin_projection_blue<collision_distance:
+                    
                     print('collision!!!')
                     collision=True
                     summary=True
@@ -163,6 +179,7 @@ while not rospy.is_shutdown():
           
         else:
             
+            agent_i.saver.save(elapsed_time_entire,collision)
             collision=False
             summary=False
             agent_i.reset(client)
@@ -174,7 +191,7 @@ while not rospy.is_shutdown():
             print('elapsed_time_entire:',elapsed_time_entire)
             sensor.update(client,ros_interface,initializer,lidar,agent_i,episode_counter,create_image_message=False,create_lidar_message=False)
             sv.initialze_vector_root(cone_set,sensor)
-            
+
             if episode_counter>agent_i.memory_capacity_boundary :
                 
                 imitation_drive=True

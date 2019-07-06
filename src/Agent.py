@@ -5,7 +5,8 @@ Created on Wed May 29 17:38:44 2019
 
 @author: spikezz
 """
-
+import os
+import shutil
 import Neurocore
 import copy
 import math
@@ -30,7 +31,7 @@ class Agent_Controller(object):
         self.predict_step=12
         self.curverature_sample_step=6
         self.open_control_rate=0.54
-#        self.open_control_rate=0.9
+#        self.open_control_rate=0.3
         self.close_control_rate=1-self.open_control_rate
         self.set_point_speed_step=0.3
         self.set_point_speed_min=set_point_speed_min
@@ -150,7 +151,68 @@ class Agent_Controller(object):
         
 class Agent_Imitation(object):
     
-    def __init__(self,input_dim,action_dim,sess,training_phase=0):
+    class Saver(object):
+
+        def __init__(self,sess,agent_imitation,load,save_all_variable):
+            
+            self.load = load
+            self.save_all_variable=save_all_variable
+            self.sess=sess
+            self.model_save_id=0
+            self.model_load_id=0
+            self.save_dictionary = '/media/spikezz/1E50709050706FFF/Driverless/Model/Model_'+str(self.model_save_id)
+            self.load_dictionary = '/media/spikezz/1E50709050706FFF/Driverless/Model/Model_'+str(self.model_load_id)
+            
+            if save_all_variable:
+                
+                self.saver=tf.train.Saver(max_to_keep=1000)
+                
+            else:
+                
+                variable_list_to_save=[]
+                imitation_actor_variable_list=[v for v in agent_imitation.actor.e_params]
+                variable_list_to_save.extend(imitation_actor_variable_list)      
+                self.saver=tf.train.Saver(var_list=variable_list_to_save,max_to_keep=1000)
+            
+            if self.load:
+                
+                self.sess.run(tf.global_variables_initializer())
+                self.saver.restore(self.sess, tf.train.latest_checkpoint(self.load_dictionary))
+            
+            else:
+                
+                if os.path.isdir(self.load_dictionary): 
+                    
+                    shutil.rmtree(self.load_dictionary)
+                    
+                os.mkdir(self.save_dictionary)    
+                self.sess.run(tf.global_variables_initializer())
+        
+        def save(self,elapsed_time_entire,collision):
+            
+            self.model_save_id+=1
+            self.save_dictionary = '/media/spikezz/1E50709050706FFF/Driverless/Model/Model_'+str(self.model_save_id)
+            
+            if os.path.isdir(self.save_dictionary): 
+                
+                shutil.rmtree(self.save_dictionary)
+                
+            os.mkdir(self.save_dictionary)
+    
+            ckpt_path = os.path.join( self.save_dictionary, 'DDPG.ckpt')
+            save_path = self.saver.save(self.sess, ckpt_path, write_meta_graph=False)
+            print("\nSave Model %s\n" % save_path)
+    
+            file_dictionary = os.path.join( self.save_dictionary, 'episode_reward.txt')
+            fw=open(file_dictionary, mode='w')
+            log_str='write logs here:\n'+'elapsed_time_entire:'+str(elapsed_time_entire)+\
+                    '\n'+'collision?\t'+str(collision)
+
+            fw.seek(0,0)
+            fw.write( log_str)
+
+    
+    def __init__(self,input_dim,action_dim,sess,load,save_taining_parameter,training_phase=0):
         
         #session
         self.sess=sess
@@ -169,7 +231,9 @@ class Agent_Imitation(object):
         #size of memory slice
         self.memory_batch = 16
         #load model
-        self.load=False
+        self.load=load
+        #save entire model
+        self.save_all=save_taining_parameter
         #action of Agent
         self.action=np.zeros(self.action_dim)
         #copy of action
@@ -183,6 +247,8 @@ class Agent_Imitation(object):
         self.summary_set=[]
         #define neuro actor
         self.actor=Neurocore.Actor_Imitation(self,input_dim,action_dim,sess,self.action_boundary,self.lr_i,training_phase=training_phase)
+        #define model saver
+        self.saver = self.Saver(self.sess,self,self.load,self.save_all)
         #data history:odm
         self.odm_msg=[]
         self.eul_msg=[]

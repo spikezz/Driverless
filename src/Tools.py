@@ -7,6 +7,7 @@ Created on Sun Jun  2 22:17:00 2019
 """
 import matplotlib.pyplot as plt
 
+
 class Summary_Scope(object):
     
     class Summary_Ploter(object):
